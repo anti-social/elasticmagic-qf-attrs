@@ -21,7 +21,7 @@ jobs:
       elasticsearch:
         image: elasticsearch:6.8.7
         ports:
-        - 9200/tcp
+        - 9200:9200
         options: >-
           -e="discovery.type=single-node"
           --health-cmd="curl http://localhost:9200/_cluster/health"
