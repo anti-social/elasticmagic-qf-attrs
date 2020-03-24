@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "elasticmagic-qf-attrs"
+version = "0.1.0"
+description = ""
+authors = ["Alexander Koval <kovalidis@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+elasticmagic = "^0.1.0-alpha.12"
+
+[tool.poetry.dev-dependencies]
+flake8 = "^3.7.9"
+flake8-print = "^3.1.4"
+pytest = "^5.2"
+pytest-cov = "^2.8.1"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
