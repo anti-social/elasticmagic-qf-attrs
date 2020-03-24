@@ -64,3 +64,30 @@ async def test_range_attrs(es_index, products):
         {'a4__gte': '6.2', 'a4__lte': '6.4'}
     )
     assert (await sq.count()) == 2
+
+
+@pytest.mark.asyncio
+async def test_all_attrs(es_index, products):
+    qf = AttrsQueryFilter()
+
+    sq = qf.apply(
+        es_index.search_query(),
+        {
+            'a1': ['2', '3', '4'],
+            'a2': '1',
+            'a3': 'true',
+        }
+    )
+    assert (await sq.count()) == 1
+
+    sq = qf.apply(
+        es_index.search_query(),
+        {
+            'a1': ['1', '3', '4'],
+            'a2': '1',
+            'a4__gte': '6.45',
+            'a3': ['false', 'true'],
+        }
+    )
+    assert (await sq.count()) == 2
+
