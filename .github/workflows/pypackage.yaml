@@ -17,6 +17,18 @@ jobs:
       matrix:
         python-version: [3.8]
 
+    services:
+      elasticsearch:
+        image: elasticsearch:6.8.7
+        ports:
+        - 9200/tcp
+        options: >-
+          -e="discovery.type=single-node"
+          --health-cmd="curl http://localhost:9200/_cluster/health"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=10
+
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -30,6 +42,10 @@ jobs:
     - name: Lint with flake8
       run: |
         poetry run flake8
-    - name: Test with pytest
+    - name: Run unit tests
       run: |
-        poetry run pytest --cov
+        poetry run pytest tests --cov
+
+    - name: Run integration tests
+      run: |
+        poetry run pytest tests_integ --cov
