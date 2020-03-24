@@ -90,4 +90,3 @@ async def test_all_attrs(es_index, products):
         }
     )
     assert (await sq.count()) == 2
-
