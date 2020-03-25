@@ -37,8 +37,13 @@ class AttrSimpleFilter(BaseFilter):
             expr = self._get_filter_expression(attr_id, w)
             if not expr:
                 continue
-            search_query = search_query.filter(expr)
+            search_query = self._apply_filter_expression(
+                search_query, expr, attr_id
+            )
         return search_query
+
+    def _apply_filter_expression(self, search_query, expr, attr_id):
+        return search_query.filter(expr)
 
     def _get_filter_expression(self, attr_id, values):
         raise NotImplementedError  # pragma: no cover
