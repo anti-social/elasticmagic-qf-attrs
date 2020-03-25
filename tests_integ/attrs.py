@@ -1,8 +1,8 @@
 from enum import IntEnum, unique
 
-from elasticmagic_qf_attrs import merge_attr_value_bool
-from elasticmagic_qf_attrs import merge_attr_value_int
-from elasticmagic_qf_attrs import merge_attr_value_float
+from elasticmagic_qf_attrs.util import merge_attr_value_bool
+from elasticmagic_qf_attrs.util import merge_attr_value_int
+from elasticmagic_qf_attrs.util import merge_attr_value_float
 
 
 def attr(cls):
