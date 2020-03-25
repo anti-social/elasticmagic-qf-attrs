@@ -1,3 +1,5 @@
+import typing as t
+
 from elasticmagic import Bool, Range, Term, Terms
 from elasticmagic import types
 
@@ -22,7 +24,9 @@ class AttrSimpleFilter(BaseFilter):
         super().__init__(name, alias=alias)
         self.field = field
 
-    def _iter_attr_values(self, params):
+    def _iter_attr_values(
+            self, params: t.Dict[str, t.Dict[str, t.List[str]]]
+    ) -> t.Generator[t.Tuple[int, t.List[int]], None, None]:
         for k, w in params.items():
             if not k.startswith(self.alias):
                 continue
@@ -37,22 +41,34 @@ class AttrSimpleFilter(BaseFilter):
             expr = self._get_filter_expression(attr_id, w)
             if not expr:
                 continue
-            search_query = search_query.filter(expr)
+            search_query = self._apply_filter_expression(
+                search_query, expr, attr_id
+            )
         return search_query
+
+    def _apply_filter_expression(self, search_query, expr, attr_id):
+        return search_query.filter(expr)
 
     def _get_filter_expression(self, attr_id, values):
         raise NotImplementedError  # pragma: no cover
 
 
 class AttrIntSimpleFilter(AttrSimpleFilter):
-    def _get_filter_expression(self, attr_id, values):
+    @staticmethod
+    def _parse_values(values: t.Dict[str, t.List[str]]) -> t.List[int]:
         w = []
         for v in values.get('exact', []):
             try:
-                value_id = int_codec.decode(v, es_type=types.Integer)
+                w.append(int_codec.decode(v, es_type=types.Integer))
             except ValueError:
                 continue
-            w.append(merge_attr_value_int(attr_id, value_id))
+        return w
+
+    def _get_filter_expression(self, attr_id, values):
+        w = [
+            merge_attr_value_int(attr_id, v)
+            for v in self._parse_values(values)
+        ]
         if not w:
             return None
         if len(w) == 1:
@@ -69,7 +85,7 @@ class AttrIntSimpleFilter(AttrSimpleFilter):
 #                *               *
 #    negative   *                 *    positive
 #    floats     *                 *    floats
-#             ⤹ *               * ⤸
+#             ⤹ *                * ⤸
 #                 **           **
 #                    *********
 #                       | |

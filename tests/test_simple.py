@@ -1,18 +1,10 @@
 from elasticmagic import Bool, Range, Term, Terms
 from elasticmagic import SearchQuery
-from elasticmagic.compiler import Compiler_6_0
 from elasticmagic.ext.queryfilter import QueryFilter
-
-import pytest
 
 from elasticmagic_qf_attrs import AttrBoolSimpleFilter
 from elasticmagic_qf_attrs import AttrFloatSimpleFilter
 from elasticmagic_qf_attrs import AttrIntSimpleFilter
-
-
-@pytest.fixture
-def compiler():
-    return Compiler_6_0
 
 
 def test_attr_int_simple_filter(compiler):
