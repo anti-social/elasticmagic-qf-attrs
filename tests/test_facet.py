@@ -2,6 +2,7 @@ from elasticmagic import agg
 from elasticmagic import Bool, Field, Term, Terms
 from elasticmagic import SearchQuery
 from elasticmagic.ext.queryfilter import QueryFilter
+from elasticmagic.result import SearchResult
 
 from elasticmagic_qf_attrs.facet import AttrIntFacetFilter
 
@@ -18,6 +19,40 @@ def test_attr_int_simple_filter(compiler):
         })
         .to_dict(compiler=compiler)
     )
+    result = SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_int': {
+                    'buckets': [
+                        {
+                            'key': 0x12_00000001,
+                            'doc_count': 123,
+                        },
+                        {
+                            'key': 0x144_0000dead,
+                            'doc_count': 99
+                        },
+                        {
+                            'key': 0x12_f0000000,
+                            'doc_count': 1
+                        }
+                    ]
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    )
+    qf_res = qf.process_result(result)
+    facet = qf_res.attr_int.get_attr_facet(18)
+    assert len(facet.all_values) == 2
+    assert facet.all_values[0].value == 1
+    assert facet.all_values[0].count == 123
+    assert facet.all_values[1].value == 4026531840
+    assert facet.all_values[1].count == 1
+    facet = qf_res.attr_int.get_attr_facet(324)
+    assert len(facet.all_values) == 1
+    assert facet.all_values[0].value == 57005
+    assert facet.all_values[0].count == 99
 
     sq = qf.apply(SearchQuery(), {'b18': '224'})
     assert sq.to_dict(compiler=compiler) == (
@@ -28,7 +63,8 @@ def test_attr_int_simple_filter(compiler):
         .to_dict(compiler=compiler)
     )
 
-    sq = qf.apply(SearchQuery(), {'a18': '1234'})
+    params = {'a18': '1234'}
+    sq = qf.apply(SearchQuery(), params)
     assert sq.to_dict(compiler=compiler) == (
         SearchQuery()
         .aggs({

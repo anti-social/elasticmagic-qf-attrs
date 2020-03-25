@@ -1,8 +1,13 @@
 import struct
+import typing
 
 
 def merge_attr_value_int(attr_id: int, value_id: int) -> int:
     return (attr_id << 32) | (value_id & 0xffff_ffff)
+
+
+def split_attr_value_int(merged_attr: int) -> typing.Tuple[int, int]:
+    return merged_attr >> 32, merged_attr & 0xffff_ffff
 
 
 def merge_attr_value_bool(attr_id: int, value: bool) -> int:

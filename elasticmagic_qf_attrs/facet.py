@@ -1,7 +1,11 @@
+import typing
+
 from elasticmagic import agg
 from elasticmagic import Bool
+from elasticmagic.ext.queryfilter.queryfilter import BaseFilterResult
 
 from .simple import AttrIntSimpleFilter
+from .util import split_attr_value_int
 
 
 class AttrIntFacetFilter(AttrIntSimpleFilter):
@@ -74,3 +78,62 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
                 aggs.update(attr_aggs)
 
         return search_query.aggs(aggs)
+
+    def _process_result(self, result, params):
+        main_agg = result.get_aggregation(self._agg_name)
+        if main_agg is None:
+            main_agg = result.get_aggregation(self._filter_agg_name) \
+                .get_aggregation(self._agg_name)
+
+        facet_result = AttrIntFacetFilterResult(self.name, self.alias)
+        for bucket in main_agg.buckets:
+            attr_id, value_id = split_attr_value_int(bucket.key)
+            fv = AttrIntFacetValue(value_id, bucket.doc_count, False)
+            facet_result.add_attr_value(attr_id, fv)
+
+        return facet_result
+
+
+class AttrIntFacetValue:
+    def __init__(self, value: int, count: int, selected: bool):
+        self.value = value
+        self.count = count
+        self.selected = selected
+
+    @property
+    def count_text(self):
+        raise NotImplementedError
+
+
+class AttrIntFacet:
+    def __init__(self):
+        self.values: typing.List[AttrIntFacetValue] = []
+        self.selected_values = []
+        self.all_values = []
+        self._values_map = {}
+
+    def add_value(self, facet_value: AttrIntFacetValue) -> None:
+        if facet_value.selected:
+            self.selected_values.append(facet_value)
+        else:
+            self.values.append(facet_value)
+        self.all_values.append(facet_value)
+        self._values_map[facet_value.value] = facet_value
+
+
+class AttrIntFacetFilterResult(BaseFilterResult):
+    def __init__(self, name, alias):
+        super().__init__(name, alias)
+        self.attr_facets: typing.Dict[int, AttrIntFacet] = {}
+
+    def add_attr_value(
+            self, attr_id: int, facet_value: AttrIntFacetValue
+    ) -> None:
+        facet = self.attr_facets.get(attr_id)
+        if facet is None:
+            facet = AttrIntFacet()
+            self.attr_facets[attr_id] = facet
+        facet.add_value(facet_value)
+
+    def get_attr_facet(self, attr_id: int) -> AttrIntFacet:
+        return self.attr_facets.get(attr_id)
