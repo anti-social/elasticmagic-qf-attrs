@@ -2,7 +2,10 @@ import typing
 
 from elasticmagic import agg
 from elasticmagic import Bool
+from elasticmagic import Field
+from elasticmagic import SearchQuery
 from elasticmagic.ext.queryfilter.queryfilter import BaseFilterResult
+from elasticmagic.result import SearchResult
 
 from .simple import AttrIntSimpleFilter
 from .util import split_attr_value_int
@@ -10,8 +13,8 @@ from .util import split_attr_value_int
 
 class AttrIntFacetFilter(AttrIntSimpleFilter):
     def __init__(
-            self, name, field, alias=None,
-            full_agg_size=10_000, single_agg_size=100,
+            self, name: str, field: Field, alias: typing.Optional[str]=None,
+            full_agg_size: int=10_000, single_agg_size: int=100,
     ):
         super().__init__(name, field, alias=alias)
         self.full_agg_size = full_agg_size
@@ -34,7 +37,7 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
     def _filter_agg_name(self):
         return f'{self.qf._name}.{self.name}.filter'
 
-    def _apply_agg(self, search_query):
+    def _apply_agg(self, search_query: SearchQuery):
         aggs = {}
 
         exclude_tags = {self.qf._name}
@@ -79,15 +82,33 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
 
         return search_query.aggs(aggs)
 
-    def _process_result(self, result, params):
+    def _process_result(
+        self, result: SearchResult, params: typing.Dict
+    ) -> 'AttrIntFacetFilterResult':
+        print(params)
+        facet_result = AttrIntFacetFilterResult(self.name, self.alias)
+
+        processed_attr_ids = set()
+        for agg_name, attr_agg in result.aggregations.items():
+            print(agg_name)
+            if agg_name.startswith(f'{self._agg_name}:'):
+                attr_id = int(agg_name.partition(':')[2])
+                processed_attr_ids.add(attr_id)
+                for bucket in attr_agg.buckets:
+                    found_attr_id, value_id = split_attr_value_int(bucket.key)
+                    if found_attr_id != attr_id:
+                        continue
+                    fv = AttrIntFacetValue(value_id, bucket.doc_count, False)
+                    facet_result.add_attr_value(attr_id, fv)
+
         main_agg = result.get_aggregation(self._agg_name)
         if main_agg is None:
             main_agg = result.get_aggregation(self._filter_agg_name) \
                 .get_aggregation(self._agg_name)
-
-        facet_result = AttrIntFacetFilterResult(self.name, self.alias)
         for bucket in main_agg.buckets:
             attr_id, value_id = split_attr_value_int(bucket.key)
+            if attr_id in processed_attr_ids:
+                continue
             fv = AttrIntFacetValue(value_id, bucket.doc_count, False)
             facet_result.add_attr_value(attr_id, fv)
 
@@ -108,9 +129,9 @@ class AttrIntFacetValue:
 class AttrIntFacet:
     def __init__(self):
         self.values: typing.List[AttrIntFacetValue] = []
-        self.selected_values = []
-        self.all_values = []
-        self._values_map = {}
+        self.selected_values: typing.List[AttrIntFacetValue] = []
+        self.all_values: typing.List[AttrIntFacetValue] = []
+        self._values_map: typing.Dict[int, AttrIntFacetValue] = {}
 
     def add_value(self, facet_value: AttrIntFacetValue) -> None:
         if facet_value.selected:
@@ -120,6 +141,9 @@ class AttrIntFacet:
         self.all_values.append(facet_value)
         self._values_map[facet_value.value] = facet_value
 
+    def get_value(self, value: int) -> AttrIntFacetValue:
+        return self._values_map.get(value)
+
 
 class AttrIntFacetFilterResult(BaseFilterResult):
     def __init__(self, name, alias):
@@ -127,7 +151,7 @@ class AttrIntFacetFilterResult(BaseFilterResult):
         self.attr_facets: typing.Dict[int, AttrIntFacet] = {}
 
     def add_attr_value(
-            self, attr_id: int, facet_value: AttrIntFacetValue
+        self, attr_id: int, facet_value: AttrIntFacetValue
     ) -> None:
         facet = self.attr_facets.get(attr_id)
         if facet is None:

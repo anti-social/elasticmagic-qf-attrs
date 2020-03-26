@@ -11,6 +11,15 @@ def test_attr_int_simple_filter(compiler):
     qf = QueryFilter()
     qf.add_filter(AttrIntFacetFilter('attr_int', Field('attr.int'), alias='a'))
 
+    sq = qf.apply(SearchQuery(), {'b18': '224'})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .aggs({
+            'qf.attr_int': agg.Terms(Field('attr.int'), size=10_000)
+        })
+        .to_dict(compiler=compiler)
+    )
+
     sq = qf.apply(SearchQuery(), {})
     assert sq.to_dict(compiler=compiler) == (
         SearchQuery()
@@ -53,15 +62,6 @@ def test_attr_int_simple_filter(compiler):
     assert len(facet.all_values) == 1
     assert facet.all_values[0].value == 57005
     assert facet.all_values[0].count == 99
-
-    sq = qf.apply(SearchQuery(), {'b18': '224'})
-    assert sq.to_dict(compiler=compiler) == (
-        SearchQuery()
-        .aggs({
-            'qf.attr_int': agg.Terms(Field('attr.int'), size=10_000)
-        })
-        .to_dict(compiler=compiler)
-    )
 
     params = {'a18': '1234'}
     sq = qf.apply(SearchQuery(), params)
