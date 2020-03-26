@@ -1,8 +1,9 @@
 import typing as t
 
-from elasticmagic import Bool, Range, Term, Terms
+from elasticmagic import Bool, Field, Range, Term, Terms
+from elasticmagic import SearchQuery
 from elasticmagic import types
-
+from elasticmagic.expression import Expression
 from elasticmagic.ext.queryfilter.queryfilter import BaseFilter
 
 from elasticmagic.ext.queryfilter.codec import BoolCodec
@@ -14,19 +15,22 @@ from .util import merge_attr_value_float
 from .util import merge_attr_value_int
 
 
+ParamValues = t.Dict[str, t.List[str]]
+Params = t.Dict[str, ParamValues]
+
 bool_codec = BoolCodec()
 float_codec = FloatCodec()
 int_codec = IntCodec()
 
 
 class AttrSimpleFilter(BaseFilter):
-    def __init__(self, name, field, alias=None):
+    def __init__(self, name: str, field: Field, alias: str = None):
         super().__init__(name, alias=alias)
         self.field = field
 
     def _iter_attr_values(
-            self, params: t.Dict[str, t.Dict[str, t.List[str]]]
-    ) -> t.Generator[t.Tuple[int, t.List[int]], None, None]:
+            self, params: Params
+    ) -> t.Generator[t.Tuple[int, t.Dict[str, t.List[str]]], None, None]:
         for k, w in params.items():
             if not k.startswith(self.alias):
                 continue
@@ -36,7 +40,9 @@ class AttrSimpleFilter(BaseFilter):
                 continue
             yield (attr_id, w)
 
-    def _apply_filter(self, search_query, params):
+    def _apply_filter(
+        self, search_query: SearchQuery, params: t.Dict
+    ) -> SearchQuery:
         for attr_id, w in self._iter_attr_values(params):
             expr = self._get_filter_expression(attr_id, w)
             if not expr:
@@ -46,16 +52,20 @@ class AttrSimpleFilter(BaseFilter):
             )
         return search_query
 
-    def _apply_filter_expression(self, search_query, expr, attr_id):
+    def _apply_filter_expression(
+        self, search_query: SearchQuery, expr: Expression, attr_id: int
+    ) -> SearchQuery:
         return search_query.filter(expr)
 
-    def _get_filter_expression(self, attr_id, values):
+    def _get_filter_expression(
+            self, attr_id: int, values: ParamValues
+    ) -> t.Optional[Expression]:
         raise NotImplementedError  # pragma: no cover
 
 
 class AttrIntSimpleFilter(AttrSimpleFilter):
     @staticmethod
-    def _parse_values(values: t.Dict[str, t.List[str]]) -> t.List[int]:
+    def _parse_values(values: ParamValues) -> t.List[int]:
         w = []
         for v in values.get('exact', []):
             try:
@@ -64,7 +74,9 @@ class AttrIntSimpleFilter(AttrSimpleFilter):
                 continue
         return w
 
-    def _get_filter_expression(self, attr_id, values):
+    def _get_filter_expression(
+        self, attr_id: int, values
+    ) -> t.Optional[Expression]:
         w = [
             merge_attr_value_int(attr_id, v)
             for v in self._parse_values(values)
@@ -94,7 +106,7 @@ class AttrIntSimpleFilter(AttrSimpleFilter):
 #
 class AttrFloatSimpleFilter(AttrSimpleFilter):
     @staticmethod
-    def _convert_last_value(values):
+    def _convert_last_value(values: t.List[str]) -> t.Optional[float]:
         if not values:
             return None
         try:
@@ -103,22 +115,24 @@ class AttrFloatSimpleFilter(AttrSimpleFilter):
             return None
 
     @staticmethod
-    def _plus_zero(attr_id):
+    def _plus_zero(attr_id: int) -> int:
         return merge_attr_value_float(attr_id, 0.0)
 
     @staticmethod
-    def _minus_zero(attr_id):
+    def _minus_zero(attr_id: int) -> int:
         return merge_attr_value_float(attr_id, -0.0)
 
     @staticmethod
-    def _plus_inf(attr_id):
+    def _plus_inf(attr_id: int) -> int:
         return merge_attr_value_float(attr_id, float('inf'))
 
     @staticmethod
-    def _minus_inf(attr_id):
+    def _minus_inf(attr_id: int) -> int:
         return merge_attr_value_float(attr_id, float('-inf'))
 
-    def _get_filter_expression(self, attr_id, values):
+    def _get_filter_expression(
+        self, attr_id: int, values: ParamValues
+    ) -> t.Optional[Expression]:
         gte = self._convert_last_value(values.get('gte', []))
         gte_value = None
         if gte is not None:
@@ -189,9 +203,13 @@ class AttrFloatSimpleFilter(AttrSimpleFilter):
                     ),
                 )
 
+        return None
+
 
 class AttrBoolSimpleFilter(AttrSimpleFilter):
-    def _get_filter_expression(self, attr_id, values):
+    def _get_filter_expression(
+        self, attr_id: int, values: ParamValues
+    ) -> t.Optional[Expression]:
         w = []
         for v in values.get('exact', []):
             try:

@@ -30,6 +30,9 @@ jobs:
     - name: Lint with flake8
       run: |
         poetry run flake8
+    - name: Check types with mypy
+      run: |
+        poetry run mypy
     - name: Run unit tests
       run: |
         poetry run pytest tests --cov

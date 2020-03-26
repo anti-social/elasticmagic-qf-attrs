@@ -33,14 +33,14 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
         )
 
     @property
-    def _agg_name(self):
+    def _agg_name(self) -> str:
         return f'{self.qf._name}.{self.name}'
 
     @property
-    def _filter_agg_name(self):
+    def _filter_agg_name(self) -> str:
         return f'{self.qf._name}.{self.name}.filter'
 
-    def _apply_agg(self, search_query: SearchQuery):
+    def _apply_agg(self, search_query: SearchQuery) -> SearchQuery:
         aggs = {}
 
         exclude_tags = {self.qf._name}
@@ -92,7 +92,7 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
         try:
             return int(agg_name.rpartition(':')[2])
         except ValueError:
-            pass
+            return None
 
     def _process_result(
         self, result: SearchResult, params: t.Dict
@@ -100,8 +100,8 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
         facet_result = AttrIntFacetFilterResult(self.name, self.alias)
 
         selected_attr_values = {}
-        for attr_id, w in self._iter_attr_values(params):
-            selected_attr_values[attr_id] = set(self._parse_values(w))
+        for selected_attr_id, w in self._iter_attr_values(params):
+            selected_attr_values[selected_attr_id] = set(self._parse_values(w))
 
         processed_attr_ids = set()
         for agg_name, attr_agg in result.aggregations.items():
@@ -115,6 +115,8 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
                 continue
 
             attr_id = self._parse_attr_id_from_agg_name(agg_name)
+            if attr_id is None:
+                continue
             selected_values = selected_attr_values.get(attr_id) or set()
             processed_attr_ids.add(attr_id)
             for bucket in attr_agg.buckets:
@@ -149,7 +151,7 @@ class AttrIntFacetValue:
         self.selected = selected
 
     @property
-    def count_text(self):
+    def count_text(self) -> str:
         raise NotImplementedError
 
 
@@ -169,12 +171,12 @@ class AttrIntFacet:
         self.all_values.append(facet_value)
         self._values_map[facet_value.value] = facet_value
 
-    def get_value(self, value: int) -> AttrIntFacetValue:
+    def get_value(self, value: int) -> t.Optional[AttrIntFacetValue]:
         return self._values_map.get(value)
 
 
 class AttrIntFacetFilterResult(BaseFilterResult):
-    def __init__(self, name, alias):
+    def __init__(self, name: str, alias: str):
         super().__init__(name, alias)
         self.attr_facets: t.Dict[int, AttrIntFacet] = {}
 
@@ -187,5 +189,5 @@ class AttrIntFacetFilterResult(BaseFilterResult):
             self.attr_facets[attr_id] = facet
         facet.add_value(facet_value)
 
-    def get_facet(self, attr_id: int) -> AttrIntFacet:
+    def get_facet(self, attr_id: int) -> t.Optional[AttrIntFacet]:
         return self.attr_facets.get(attr_id)

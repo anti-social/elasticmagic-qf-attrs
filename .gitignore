@@ -2,5 +2,6 @@ __pycache__
 *.egg-info
 
 .tox
+.mypy_cache
 .coverage
 htmlcov
