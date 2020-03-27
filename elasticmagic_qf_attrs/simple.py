@@ -1,3 +1,4 @@
+from abc import ABC
 import typing as t
 
 from elasticmagic import Bool, Field, Range, Term, Terms
@@ -18,12 +19,14 @@ from .util import merge_attr_value_int
 ParamValues = t.Dict[str, t.List[str]]
 Params = t.Dict[str, ParamValues]
 
+T = t.TypeVar('T')
+
 bool_codec = BoolCodec()
 float_codec = FloatCodec()
 int_codec = IntCodec()
 
 
-class AttrSimpleFilter(BaseFilter):
+class BaseAttrSimpleFilter(ABC, BaseFilter):
     def __init__(self, name: str, field: Field, alias: str = None):
         super().__init__(name, alias=alias)
         self.field = field
@@ -62,10 +65,14 @@ class AttrSimpleFilter(BaseFilter):
     ) -> t.Optional[Expression]:
         raise NotImplementedError  # pragma: no cover
 
-
-class AttrIntSimpleFilter(AttrSimpleFilter):
     @staticmethod
-    def _parse_values(values: ParamValues) -> t.List[int]:
+    def _parse_values(values: ParamValues) -> t.List:
+        raise NotImplementedError  # pragma: no cover
+
+
+class AttrIntSimpleFilter(BaseAttrSimpleFilter):
+    @staticmethod
+    def _parse_values(values: ParamValues) -> t.List:
         w = []
         for v in values.get('exact', []):
             try:
@@ -81,6 +88,34 @@ class AttrIntSimpleFilter(AttrSimpleFilter):
             merge_attr_value_int(attr_id, v)
             for v in self._parse_values(values)
         ]
+        if not w:
+            return None
+        if len(w) == 1:
+            return Term(self.field, w[0])
+        return Terms(self.field, w)
+
+
+class AttrBoolSimpleFilter(BaseAttrSimpleFilter):
+    @staticmethod
+    def _parse_values(values: ParamValues) -> t.List:
+        w = []
+        for v in values.get('exact', []):
+            try:
+                w.append(bool_codec.decode(v))
+            except ValueError:
+                continue
+        return w
+
+    def _get_filter_expression(
+            self, attr_id: int, values: ParamValues
+    ) -> t.Optional[Expression]:
+        w = []
+        for v in values.get('exact', []):
+            try:
+                value = bool_codec.decode(v)
+            except ValueError:
+                continue
+            w.append(merge_attr_value_bool(attr_id, value))
         if not w:
             return None
         if len(w) == 1:
@@ -104,7 +139,7 @@ class AttrIntSimpleFilter(AttrSimpleFilter):
 #    0x{attr_id}_80000000 0x{attr_id}_7f800000
 #             -0.0                 +Inf
 #
-class AttrFloatSimpleFilter(AttrSimpleFilter):
+class AttrFloatSimpleFilter(BaseAttrSimpleFilter):
     @staticmethod
     def _convert_last_value(values: t.List[str]) -> t.Optional[float]:
         if not values:
@@ -204,21 +239,3 @@ class AttrFloatSimpleFilter(AttrSimpleFilter):
                 )
 
         return None
-
-
-class AttrBoolSimpleFilter(AttrSimpleFilter):
-    def _get_filter_expression(
-        self, attr_id: int, values: ParamValues
-    ) -> t.Optional[Expression]:
-        w = []
-        for v in values.get('exact', []):
-            try:
-                value = bool_codec.decode(v)
-            except ValueError:
-                continue
-            w.append(merge_attr_value_bool(attr_id, value))
-        if not w:
-            return None
-        if len(w) == 1:
-            return Term(self.field, w[0])
-        return Terms(self.field, w)

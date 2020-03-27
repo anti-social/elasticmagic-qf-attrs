@@ -14,5 +14,9 @@ def merge_attr_value_bool(attr_id: int, value: bool) -> int:
     return (attr_id << 1) | value
 
 
+def split_attr_value_bool(merged_attr: int) -> typing.Tuple[int, bool]:
+    return merged_attr >> 1, bool(merged_attr & 1)
+
+
 def merge_attr_value_float(attr_id: int, value: float) -> int:
     return (attr_id << 32) | struct.unpack('=I', struct.pack('=f', value))[0]

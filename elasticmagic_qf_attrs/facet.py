@@ -5,21 +5,30 @@ from elasticmagic import Bool
 from elasticmagic import Field
 from elasticmagic import SearchQuery
 from elasticmagic.expression import Expression
-from elasticmagic.ext.queryfilter.queryfilter import BaseFilterResult
 from elasticmagic.result import SearchResult
 
+from .facet_result import AttrFacetFilterResult
+from .facet_result import AttrFacetValue
+from .simple import AttrBoolSimpleFilter
 from .simple import AttrIntSimpleFilter
+from .simple import BaseAttrSimpleFilter
 from .util import split_attr_value_int
+from .util import split_attr_value_bool
 
 
-class AttrIntFacetFilter(AttrIntSimpleFilter):
-    def __init__(
-            self, name: str, field: Field, alias: t.Optional[str] = None,
-            full_agg_size: int = 10_000, single_agg_size: int = 100,
-    ):
-        super().__init__(name, field, alias=alias)
-        self.full_agg_size = full_agg_size
-        self.single_agg_size = single_agg_size
+T = t.TypeVar('T')
+
+
+class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
+    full_agg_size: int
+    single_agg_size: int
+
+    result_cls: t.Type[AttrFacetFilterResult[T]]
+
+    facet_value_cls: t.Type[AttrFacetValue[T]]
+
+    def split_bucket_key(self, key: int) -> t.Tuple[int, T]:
+        raise NotImplementedError  # pragma: no cover
 
     def _apply_filter_expression(
             self, search_query: SearchQuery, expr: Expression, attr_id: int
@@ -95,9 +104,9 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
             return None
 
     def _process_result(
-        self, result: SearchResult, params: t.Dict
-    ) -> 'AttrIntFacetFilterResult':
-        facet_result = AttrIntFacetFilterResult(self.name, self.alias)
+            self, result: SearchResult, params: t.Dict
+    ) -> 'AttrFacetFilterResult[T]':
+        facet_result = self.result_cls(self.name, self.alias)
 
         selected_attr_values = {}
         for selected_attr_id, w in self._iter_attr_values(params):
@@ -120,10 +129,10 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
             selected_values = selected_attr_values.get(attr_id) or set()
             processed_attr_ids.add(attr_id)
             for bucket in attr_agg.buckets:
-                found_attr_id, value_id = split_attr_value_int(bucket.key)
+                found_attr_id, value_id = self.split_bucket_key(bucket.key)
                 if found_attr_id != attr_id:
                     continue
-                fv = AttrIntFacetValue(
+                fv = self.facet_value_cls(
                     value_id,
                     bucket.doc_count,
                     value_id in selected_values
@@ -135,59 +144,42 @@ class AttrIntFacetFilter(AttrIntSimpleFilter):
             main_agg = result.get_aggregation(self._filter_agg_name) \
                 .get_aggregation(self._agg_name)
         for bucket in main_agg.buckets:
-            attr_id, value_id = split_attr_value_int(bucket.key)
+            attr_id, value_id = self.split_bucket_key(bucket.key)
             if attr_id in processed_attr_ids:
                 continue
-            fv = AttrIntFacetValue(value_id, bucket.doc_count, False)
+            fv = AttrFacetValue(value_id, bucket.doc_count, False)
             facet_result.add_attr_value(attr_id, fv)
 
         return facet_result
 
 
-class AttrIntFacetValue:
-    def __init__(self, value: int, count: int, selected: bool):
-        self.value = value
-        self.count = count
-        self.selected = selected
+class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
+    result_cls = AttrFacetFilterResult[int]
+    facet_value_cls = AttrFacetValue[int]
 
-    @property
-    def count_text(self) -> str:
-        raise NotImplementedError
+    def __init__(
+            self, name: str, field: Field, alias: t.Optional[str] = None,
+            full_agg_size: int = 10_000, single_agg_size: int = 100,
+    ):
+        super().__init__(name, field, alias=alias)
+        self.full_agg_size = full_agg_size
+        self.single_agg_size = single_agg_size
 
-
-class AttrIntFacet:
-    def __init__(self, attr_id: int):
-        self.attr_id = attr_id
-        self.values: t.List[AttrIntFacetValue] = []
-        self.selected_values: t.List[AttrIntFacetValue] = []
-        self.all_values: t.List[AttrIntFacetValue] = []
-        self._values_map: t.Dict[int, AttrIntFacetValue] = {}
-
-    def add_value(self, facet_value: AttrIntFacetValue) -> None:
-        if facet_value.selected:
-            self.selected_values.append(facet_value)
-        else:
-            self.values.append(facet_value)
-        self.all_values.append(facet_value)
-        self._values_map[facet_value.value] = facet_value
-
-    def get_value(self, value: int) -> t.Optional[AttrIntFacetValue]:
-        return self._values_map.get(value)
+    def split_bucket_key(self, key: int) -> t.Tuple[int, int]:
+        return split_attr_value_int(key)
 
 
-class AttrIntFacetFilterResult(BaseFilterResult):
-    def __init__(self, name: str, alias: str):
-        super().__init__(name, alias)
-        self.attr_facets: t.Dict[int, AttrIntFacet] = {}
+class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
+    result_cls = AttrFacetFilterResult[bool]
+    facet_value_cls = AttrFacetValue[bool]
 
-    def add_attr_value(
-        self, attr_id: int, facet_value: AttrIntFacetValue
-    ) -> None:
-        facet = self.attr_facets.get(attr_id)
-        if facet is None:
-            facet = AttrIntFacet(attr_id)
-            self.attr_facets[attr_id] = facet
-        facet.add_value(facet_value)
+    def __init__(
+            self, name: str, field: Field, alias: t.Optional[str] = None,
+            full_agg_size: int = 100, single_agg_size: int = 2,
+    ):
+        super().__init__(name, field, alias=alias)
+        self.full_agg_size = full_agg_size
+        self.single_agg_size = single_agg_size
 
-    def get_facet(self, attr_id: int) -> t.Optional[AttrIntFacet]:
-        return self.attr_facets.get(attr_id)
+    def split_bucket_key(self, key: int) -> t.Tuple[int, bool]:
+        return split_attr_value_bool(key)
