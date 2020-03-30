@@ -1,4 +1,4 @@
-from elasticmagic import Bool, Range, Term, Terms
+from elasticmagic import Bool, Field, Range, Term, Terms
 from elasticmagic import SearchQuery
 from elasticmagic.ext.queryfilter import QueryFilter
 
@@ -9,7 +9,9 @@ from elasticmagic_qf_attrs import AttrIntSimpleFilter
 
 def test_attr_int_simple_filter(compiler):
     qf = QueryFilter()
-    qf.add_filter(AttrIntSimpleFilter('attr_int', 'attr.int', alias='a'))
+    qf.add_filter(
+        AttrIntSimpleFilter('attr_int', Field('attr.int'), alias='a')
+    )
 
     sq = qf.apply(SearchQuery(), {})
     assert sq.to_dict(compiler=compiler) == {}
@@ -54,7 +56,9 @@ def test_attr_int_simple_filter(compiler):
 
 def test_attr_float_simple_filter(compiler):
     qf = QueryFilter()
-    qf.add_filter(AttrFloatSimpleFilter('attr_float', 'attr.float', alias='a'))
+    qf.add_filter(
+        AttrFloatSimpleFilter('attr_float', Field('attr.float'), alias='a')
+    )
 
     sq = qf.apply(SearchQuery(), {})
     assert sq.to_dict(compiler=compiler) == {}
@@ -140,7 +144,9 @@ def test_attr_float_simple_filter(compiler):
 
 def test_attr_bool_simple_filter(compiler):
     qf = QueryFilter()
-    qf.add_filter(AttrBoolSimpleFilter('attr_bool', 'attr.bool', alias='a'))
+    qf.add_filter(
+        AttrBoolSimpleFilter('attr_bool', Field('attr.bool'), alias='a')
+    )
 
     sq = qf.apply(SearchQuery(), {})
     assert sq.to_dict(compiler=compiler) == {}

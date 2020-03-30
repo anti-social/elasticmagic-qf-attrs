@@ -12,6 +12,7 @@ from .facet_result import AttrFacetValue
 from .simple import AttrBoolSimpleFilter
 from .simple import AttrIntSimpleFilter
 from .simple import BaseAttrSimpleFilter
+from .util import merge_attr_value_bool
 from .util import split_attr_value_int
 from .util import split_attr_value_bool
 
@@ -23,11 +24,16 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
     full_agg_size: int
     single_agg_size: int
 
-    result_cls: t.Type[AttrFacetFilterResult[T]]
+    _result_cls: t.Type[AttrFacetFilterResult[T]]
 
-    facet_value_cls: t.Type[AttrFacetValue[T]]
+    _facet_value_cls: t.Type[AttrFacetValue[T]]
 
-    def split_bucket_key(self, key: int) -> t.Tuple[int, T]:
+    _attr_id_meta_key: str
+
+    def _split_bucket_key(self, key: int) -> t.Tuple[int, T]:
+        raise NotImplementedError  # pragma: no cover
+
+    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
         raise NotImplementedError  # pragma: no cover
 
     def _apply_filter_expression(
@@ -37,7 +43,7 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
             expr,
             meta={
                 'tags': {self.name, f'{self.alias}:{attr_id}'},
-                'attr_id': attr_id
+                self._attr_id_meta_key: attr_id
             }
         )
 
@@ -75,16 +81,19 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
         for filt, meta in post_filters:
             if not meta:
                 continue
-            attr_id = meta.get('attr_id')
+            attr_id = meta.get(self._attr_id_meta_key)
             if attr_id is None:
                 continue
             attr_aggs = {
                 f'{self._agg_name}:{attr_id}': agg.Terms(
-                    self.field, size=self.single_agg_size
+                    self.field,
+                    size=self.single_agg_size,
+                    include=self._agg_include(attr_id),
                 )
             }
             filters = [
-                f for f, m in post_filters if m.get('attr_id') != attr_id
+                f for f, m in post_filters
+                if m.get(self._attr_id_meta_key) != attr_id
             ]
             if filters:
                 aggs[f'{self._filter_agg_name}:{attr_id}'] = agg.Filter(
@@ -106,7 +115,7 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
     def _process_result(
             self, result: SearchResult, params: t.Dict
     ) -> 'AttrFacetFilterResult[T]':
-        facet_result = self.result_cls(self.name, self.alias)
+        facet_result = self._result_cls(self.name, self.alias)
 
         selected_attr_values = {}
         for selected_attr_id, w in self._iter_attr_values(params):
@@ -129,10 +138,10 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
             selected_values = selected_attr_values.get(attr_id) or set()
             processed_attr_ids.add(attr_id)
             for bucket in attr_agg.buckets:
-                found_attr_id, value_id = self.split_bucket_key(bucket.key)
+                found_attr_id, value_id = self._split_bucket_key(bucket.key)
                 if found_attr_id != attr_id:
                     continue
-                fv = self.facet_value_cls(
+                fv = self._facet_value_cls(
                     value_id,
                     bucket.doc_count,
                     value_id in selected_values
@@ -144,7 +153,7 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
             main_agg = result.get_aggregation(self._filter_agg_name) \
                 .get_aggregation(self._agg_name)
         for bucket in main_agg.buckets:
-            attr_id, value_id = self.split_bucket_key(bucket.key)
+            attr_id, value_id = self._split_bucket_key(bucket.key)
             if attr_id in processed_attr_ids:
                 continue
             fv = AttrFacetValue(value_id, bucket.doc_count, False)
@@ -154,8 +163,10 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
 
 
 class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
-    result_cls = AttrFacetFilterResult[int]
-    facet_value_cls = AttrFacetValue[int]
+    _result_cls = AttrFacetFilterResult[int]
+    _facet_value_cls = AttrFacetValue[int]
+
+    _attr_id_meta_key = 'int_attr_id'
 
     def __init__(
             self, name: str, field: Field, alias: t.Optional[str] = None,
@@ -165,13 +176,18 @@ class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
         self.full_agg_size = full_agg_size
         self.single_agg_size = single_agg_size
 
-    def split_bucket_key(self, key: int) -> t.Tuple[int, int]:
+    def _split_bucket_key(self, key: int) -> t.Tuple[int, int]:
         return split_attr_value_int(key)
+
+    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
+        return None
 
 
 class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
-    result_cls = AttrFacetFilterResult[bool]
-    facet_value_cls = AttrFacetValue[bool]
+    _result_cls = AttrFacetFilterResult[bool]
+    _facet_value_cls = AttrFacetValue[bool]
+
+    _attr_id_meta_key = 'bool_attr_id'
 
     def __init__(
             self, name: str, field: Field, alias: t.Optional[str] = None,
@@ -181,5 +197,11 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
         self.full_agg_size = full_agg_size
         self.single_agg_size = single_agg_size
 
-    def split_bucket_key(self, key: int) -> t.Tuple[int, bool]:
+    def _split_bucket_key(self, key: int) -> t.Tuple[int, bool]:
         return split_attr_value_bool(key)
+
+    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
+        return [
+            merge_attr_value_bool(attr_id, False),
+            merge_attr_value_bool(attr_id, True),
+        ]

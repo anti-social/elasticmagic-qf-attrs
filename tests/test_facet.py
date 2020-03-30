@@ -379,3 +379,191 @@ def test_attr_bool_facet_filter__empty_params(bool_qf, compiler):
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 1
     assert facet.all_values[0].selected is False
+
+
+def test_attr_bool_facet_filter__single_selected_value(bool_qf, compiler):
+    sq = bool_qf.apply(SearchQuery(), {
+        'a1': 'true',
+    })
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .aggs({
+            'qf.attr_bool.filter': agg.Filter(
+                Term('attr.bool', 0b11),
+                aggs={
+                    'qf.attr_bool': agg.Terms(Field('attr.bool'), size=100)
+                }
+            ),
+            'qf.attr_bool:1': agg.Terms(
+                Field('attr.bool'), size=2, include=[0b10, 0b11]
+            ),
+        })
+        .post_filter(Term('attr.bool', 0b11))
+        .to_dict(compiler=compiler)
+    )
+    qf_res = bool_qf.process_result(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_bool.filter': {
+                    'doc_count': 200,
+                    'qf.attr_bool': {
+                        'buckets': [
+                            {
+                                'key': 0b11,
+                                'doc_count': 123,
+                            },
+                            {
+                                'key': 0b101,
+                                'doc_count': 1
+                            },
+                        ]
+                    }
+                },
+                'qf.attr_bool:1': {
+                    'buckets': [
+                        {
+                            'key': 0b11,
+                            'doc_count': 123,
+                        },
+                        {
+                            'key': 0b10,
+                            'doc_count': 99
+                        },
+                    ]
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert len(qf_res.attr_bool.facets) == 2
+    facet = qf_res.attr_bool.get_facet(1)
+    assert len(facet.all_values) == 2
+    assert len(facet.selected_values) == 1
+    assert len(facet.values) == 1
+    assert facet.all_values[0] is facet.selected_values[0]
+    assert facet.all_values[0].value is True
+    assert facet.all_values[0].count == 123
+    assert facet.all_values[0].selected is True
+    assert facet.all_values[1].value is False
+    assert facet.all_values[1].count == 99
+    assert facet.all_values[1].selected is False
+    facet = qf_res.attr_bool.get_facet(2)
+    assert len(facet.all_values) == 1
+    assert len(facet.selected_values) == 0
+    assert len(facet.values) == 1
+    assert facet.all_values[0].value is True
+    assert facet.all_values[0].count == 1
+    assert facet.all_values[0].selected is False
+
+
+def test_attr_bool_facet_filter__multiple_selected_values(bool_qf, compiler):
+    sq = bool_qf.apply(SearchQuery(), {
+        'a1': ['true', 'false'],
+        'a2': 'true'
+    })
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .aggs({
+            'qf.attr_bool.filter': agg.Filter(
+                Bool.must(
+                    Terms('attr.bool', [0b11, 0b10]),
+                    Term('attr.bool', 0b101),
+                ),
+                aggs={
+                    'qf.attr_bool': agg.Terms(Field('attr.bool'), size=100)
+                }
+            ),
+            'qf.attr_bool.filter:1': agg.Filter(
+                Term('attr.bool', 0b101),
+                aggs={
+                    'qf.attr_bool:1': agg.Terms(
+                        Field('attr.bool'), size=2, include=[0b10, 0b11]
+                    )
+                }
+            ),
+            'qf.attr_bool.filter:2': agg.Filter(
+                Terms('attr.bool', [0b11, 0b10]),
+                aggs={
+                    'qf.attr_bool:2': agg.Terms(
+                        Field('attr.bool'), size=2, include=[0b100, 0b101]
+                    )
+                }
+            ),
+        })
+        .post_filter(
+            Bool.must(
+                Terms('attr.bool', [0b11, 0b10]),
+                Term('attr.bool', 0b101),
+            )
+        )
+        .to_dict(compiler=compiler)
+    )
+    qf_res = bool_qf.process_result(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_bool.filter': {
+                    'doc_count': 200,
+                    'qf.attr_bool': {
+                        'buckets': [
+                            {
+                                'key': 0b11,
+                                'doc_count': 123,
+                            },
+                            {
+                                'key': 0b101,
+                                'doc_count': 1
+                            },
+                        ]
+                    }
+                },
+                'qf.attr_bool.filter:1': {
+                    'doc_count': 163,
+                    'qf.attr_bool:1': {
+                        'buckets': [
+                            {
+                                'key': 0b11,
+                                'doc_count': 123,
+                            },
+                            {
+                                'key': 0b10,
+                                'doc_count': 99
+                            },
+                        ]
+                    }
+                },
+                'qf.attr_bool.filter:2': {
+                    'doc_count': 144,
+                    'qf.attr_bool:2': {
+                        'buckets': [
+                            {
+                                'key': 0b101,
+                                'doc_count': 1
+                            },
+                        ]
+                    }
+                },
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert len(qf_res.attr_bool.facets) == 2
+    facet = qf_res.attr_bool.get_facet(1)
+    assert len(facet.all_values) == 2
+    assert len(facet.selected_values) == 2
+    assert len(facet.values) == 0
+    assert facet.all_values[0] is facet.selected_values[0]
+    assert facet.all_values[1] is facet.selected_values[1]
+    assert facet.all_values[0].value is True
+    assert facet.all_values[0].count == 123
+    assert facet.all_values[0].selected is True
+    assert facet.all_values[1].value is False
+    assert facet.all_values[1].count == 99
+    assert facet.all_values[1].selected is True
+    facet = qf_res.attr_bool.get_facet(2)
+    assert len(facet.all_values) == 1
+    assert len(facet.selected_values) == 1
+    assert len(facet.values) == 0
+    assert facet.all_values[0] is facet.selected_values[0]
+    assert facet.all_values[0].value is True
+    assert facet.all_values[0].count == 1
+    assert facet.all_values[0].selected is True
