@@ -18,6 +18,18 @@ def int_qf():
 
 
 @pytest.fixture
+def int_qf_with_values():
+    qf = QueryFilter()
+    qf.add_filter(
+        AttrIntFacetFilter(
+            'attr_int', Field('attr.int'), alias='a',
+            attrs_values_getter=lambda _: {18: [0xe2e4, 0xe7e5]}
+        )
+    )
+    yield qf
+
+
+@pytest.fixture
 def bool_qf():
     qf = QueryFilter()
     qf.add_filter(
@@ -320,6 +332,29 @@ def test_attr_int_facet_filter__multiple_selected_values(int_qf, compiler):
     assert facet.all_values[1].value == 48879
     assert facet.all_values[1].count == 1
     assert facet.all_values[1].selected is True
+
+
+def test_attr_int_facet_filter__include_values(int_qf_with_values, compiler):
+    sq = int_qf_with_values.apply(SearchQuery(), {'a18': '58084'})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .aggs({
+            'qf.attr_int.filter': agg.Filter(
+                Term('attr.int', 0x12_0000e2e4),
+                aggs={
+                    'qf.attr_int': agg.Terms(
+                        Field('attr.int'), size=10_000
+                    )
+                }
+            ),
+            'qf.attr_int:18': agg.Terms(
+                Field('attr.int'), size=100,
+                include=[0x12_0000e2e4, 0x12_0000e7e5]
+            )
+        })
+        .post_filter(Term('attr.int', 0x12_0000e2e4))
+        .to_dict(compiler=compiler)
+    )
 
 
 def test_attr_bool_facet_filter__unknown_param(bool_qf, compiler):

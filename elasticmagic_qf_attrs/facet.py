@@ -13,8 +13,9 @@ from .simple import AttrBoolSimpleFilter
 from .simple import AttrIntSimpleFilter
 from .simple import BaseAttrSimpleFilter
 from .util import merge_attr_value_bool
-from .util import split_attr_value_int
+from .util import merge_attr_value_int
 from .util import split_attr_value_bool
+from .util import split_attr_value_int
 
 
 T = t.TypeVar('T')
@@ -33,7 +34,9 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
     def _split_bucket_key(self, key: int) -> t.Tuple[int, T]:
         raise NotImplementedError  # pragma: no cover
 
-    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
+    def _include_attrs_values(
+            self, attr_ids: t.Iterable[int]
+    ) -> t.Dict[int, t.List[int]]:
         raise NotImplementedError  # pragma: no cover
 
     def _apply_filter_expression(
@@ -78,17 +81,21 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
         post_filters = list(
             search_query.get_context().iter_post_filters_with_meta()
         )
+        selected_attr_ids = []
         for filt, meta in post_filters:
             if not meta:
                 continue
             attr_id = meta.get(self._attr_id_meta_key)
             if attr_id is None:
                 continue
+            selected_attr_ids.append(attr_id)
+        include_attrs_values = self._include_attrs_values(selected_attr_ids)
+        for attr_id in selected_attr_ids:
             attr_aggs = {
                 f'{self._agg_name}:{attr_id}': agg.Terms(
                     self.field,
                     size=self.single_agg_size,
-                    include=self._agg_include(attr_id),
+                    include=include_attrs_values.get(attr_id),
                 )
             }
             filters = [
@@ -162,6 +169,9 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
         return facet_result
 
 
+AttrsValuesGetter = t.Callable[[t.Iterable[int]], t.Dict[int, t.List[int]]]
+
+
 class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
     _result_cls = AttrFacetFilterResult[int]
     _facet_value_cls = AttrFacetValue[int]
@@ -171,16 +181,27 @@ class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
     def __init__(
             self, name: str, field: Field, alias: t.Optional[str] = None,
             full_agg_size: int = 10_000, single_agg_size: int = 100,
+            attrs_values_getter: t.Optional[AttrsValuesGetter] = None,
     ):
         super().__init__(name, field, alias=alias)
         self.full_agg_size = full_agg_size
         self.single_agg_size = single_agg_size
+        self._attrs_values_getter = attrs_values_getter
 
     def _split_bucket_key(self, key: int) -> t.Tuple[int, int]:
         return split_attr_value_int(key)
 
-    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
-        return None
+    def _include_attrs_values(
+            self, attr_ids: t.Iterable[int]
+    ) -> t.Dict[int, t.List[int]]:
+        if self._attrs_values_getter is None:
+            return {}
+        attrs_values = {}
+        for attr_id, values in self._attrs_values_getter(attr_ids).items():
+            attrs_values[attr_id] = [
+                merge_attr_value_int(attr_id, v) for v in values
+            ]
+        return attrs_values
 
 
 class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
@@ -200,8 +221,13 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
     def _split_bucket_key(self, key: int) -> t.Tuple[int, bool]:
         return split_attr_value_bool(key)
 
-    def _agg_include(self, attr_id: int) -> t.Optional[t.List[int]]:
-        return [
-            merge_attr_value_bool(attr_id, False),
-            merge_attr_value_bool(attr_id, True),
-        ]
+    def _include_attrs_values(
+            self, attr_ids: t.Iterable[int]
+    ) -> t.Dict[int, t.List[int]]:
+        attrs_values = {}
+        for attr_id in attr_ids:
+            attrs_values[attr_id] = [
+                merge_attr_value_bool(attr_id, False),
+                merge_attr_value_bool(attr_id, True),
+            ]
+        return attrs_values
