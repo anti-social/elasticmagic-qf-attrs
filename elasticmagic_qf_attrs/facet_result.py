@@ -7,14 +7,20 @@ T = t.TypeVar('T')
 
 
 class AttrFacetValue(t.Generic[T]):
-    def __init__(self, value: T, count: int, selected: bool):
+    def __init__(
+            self, value: T, count: int, selected: bool,
+            facet_has_selected_values: bool
+    ):
         self.value = value
         self.count = count
         self.selected = selected
+        self._facet_has_selected_values = facet_has_selected_values
 
     @property
     def count_text(self) -> str:
-        raise NotImplementedError
+        if self._facet_has_selected_values and not self.selected:
+            return f'+{self.count}'
+        return f'{self.count}'
 
 
 class AttrFacet(t.Generic[T]):

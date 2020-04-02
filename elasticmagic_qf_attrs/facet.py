@@ -151,7 +151,8 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
                 fv = self._facet_value_cls(
                     value_id,
                     bucket.doc_count,
-                    value_id in selected_values
+                    value_id in selected_values,
+                    bool(selected_values),
                 )
                 facet_result.add_attr_value(attr_id, fv)
 
@@ -163,7 +164,9 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
             attr_id, value_id = self._split_bucket_key(bucket.key)
             if attr_id in processed_attr_ids:
                 continue
-            fv = AttrFacetValue(value_id, bucket.doc_count, False)
+            fv = self._facet_value_cls(
+                value_id, bucket.doc_count, False, False
+            )
             facet_result.add_attr_value(attr_id, fv)
 
         return facet_result

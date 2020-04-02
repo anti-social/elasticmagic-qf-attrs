@@ -124,14 +124,17 @@ def test_attr_int_facet_filter__empty_params(int_qf, compiler):
     assert len(facet.all_values) == 2
     assert facet.all_values[0].value == 1
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is False
     assert facet.all_values[1].value == 4026531840
     assert facet.all_values[1].count == 1
+    assert facet.all_values[1].count_text == '1'
     assert facet.all_values[1].selected is False
     facet = qf_res.attr_int.get_facet(324)
     assert len(facet.all_values) == 1
     assert facet.all_values[0].value == 57005
     assert facet.all_values[0].count == 99
+    assert facet.all_values[0].count_text == '99'
     assert facet.all_values[0].selected is False
 
 
@@ -199,9 +202,11 @@ def test_attr_int_facet_filter__single_selected_value(int_qf, compiler):
     assert facet.all_values[1] is facet.values[0]
     assert facet.all_values[0].value == 58084
     assert facet.all_values[0].count == 99
+    assert facet.all_values[0].count_text == '99'
     assert facet.all_values[0].selected is True
     assert facet.all_values[1].value == 59365
     assert facet.all_values[1].count == 88
+    assert facet.all_values[1].count_text == '+88'
     assert facet.all_values[1].selected is False
 
     facet = qf_res.attr_int.get_facet(324)
@@ -213,9 +218,11 @@ def test_attr_int_facet_filter__single_selected_value(int_qf, compiler):
     assert facet.all_values[1] is facet.values[1]
     assert facet.all_values[0].value == 57005
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is False
     assert facet.all_values[1].value == 48879
     assert facet.all_values[1].count == 1
+    assert facet.all_values[1].count_text == '1'
     assert facet.all_values[1].selected is False
 
 
@@ -316,9 +323,11 @@ def test_attr_int_facet_filter__multiple_selected_values(int_qf, compiler):
     assert len(facet.values) == 1
     assert facet.all_values[0].value == 58084
     assert facet.all_values[0].count == 99
+    assert facet.all_values[0].count_text == '99'
     assert facet.all_values[0].selected is True
     assert facet.all_values[1].value == 59365
     assert facet.all_values[1].count == 88
+    assert facet.all_values[1].count_text == '+88'
     assert facet.all_values[1].selected is False
 
     facet = qf_res.attr_int.get_facet(324)
@@ -328,9 +337,11 @@ def test_attr_int_facet_filter__multiple_selected_values(int_qf, compiler):
     assert len(facet.values) == 0
     assert facet.all_values[0].value == 57005
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is True
     assert facet.all_values[1].value == 48879
     assert facet.all_values[1].count == 1
+    assert facet.all_values[1].count_text == '1'
     assert facet.all_values[1].selected is True
 
 
@@ -405,14 +416,17 @@ def test_attr_bool_facet_filter__empty_params(bool_qf, compiler):
     assert len(facet.all_values) == 2
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is False
     assert facet.all_values[1].value is False
     assert facet.all_values[1].count == 99
+    assert facet.all_values[1].count_text == '99'
     assert facet.all_values[1].selected is False
     facet = qf_res.attr_bool.get_facet(2)
     assert len(facet.all_values) == 1
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 1
+    assert facet.all_values[0].count_text == '1'
     assert facet.all_values[0].selected is False
 
 
@@ -478,9 +492,11 @@ def test_attr_bool_facet_filter__single_selected_value(bool_qf, compiler):
     assert facet.all_values[0] is facet.selected_values[0]
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is True
     assert facet.all_values[1].value is False
     assert facet.all_values[1].count == 99
+    assert facet.all_values[1].count_text == '+99'
     assert facet.all_values[1].selected is False
     facet = qf_res.attr_bool.get_facet(2)
     assert len(facet.all_values) == 1
@@ -488,6 +504,7 @@ def test_attr_bool_facet_filter__single_selected_value(bool_qf, compiler):
     assert len(facet.values) == 1
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 1
+    assert facet.all_values[0].count_text == '1'
     assert facet.all_values[0].selected is False
 
 
@@ -590,9 +607,11 @@ def test_attr_bool_facet_filter__multiple_selected_values(bool_qf, compiler):
     assert facet.all_values[1] is facet.selected_values[1]
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 123
+    assert facet.all_values[0].count_text == '123'
     assert facet.all_values[0].selected is True
     assert facet.all_values[1].value is False
     assert facet.all_values[1].count == 99
+    assert facet.all_values[1].count_text == '99'
     assert facet.all_values[1].selected is True
     facet = qf_res.attr_bool.get_facet(2)
     assert len(facet.all_values) == 1
@@ -601,4 +620,5 @@ def test_attr_bool_facet_filter__multiple_selected_values(bool_qf, compiler):
     assert facet.all_values[0] is facet.selected_values[0]
     assert facet.all_values[0].value is True
     assert facet.all_values[0].count == 1
+    assert facet.all_values[0].count_text == '1'
     assert facet.all_values[0].selected is True

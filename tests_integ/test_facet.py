@@ -24,27 +24,34 @@ async def test_int_attrs_empty(es_index, products):
     assert len(manufacturer_facet.all_values) == 4
     apple = manufacturer_facet.get_value(Manufacturer.Values.apple)
     assert apple.count == 1
+    assert apple.count_text == '1'
     assert apple.selected is False
     samsung = manufacturer_facet.get_value(Manufacturer.Values.samsung)
     assert samsung.count == 1
+    assert samsung.count_text == '1'
     assert samsung.selected is False
     huawei = manufacturer_facet.get_value(Manufacturer.Values.huawei)
     assert huawei.count == 2
+    assert huawei.count_text == '2'
     assert huawei.selected is False
     xiaomi = manufacturer_facet.get_value(Manufacturer.Values.xiaomi)
     assert xiaomi.count == 1
+    assert xiaomi.count_text == '1'
     assert xiaomi.selected is False
 
     country_facet = qf_res.attrs.get_facet(Country.attr_id)
     assert len(country_facet.all_values) == 3
     china = country_facet.get_value(Country.Values.china)
     assert china.count == 3
+    assert china.count_text == '3'
     assert china.selected is False
     usa = country_facet.get_value(Country.Values.usa)
     assert usa.count == 1
+    assert usa.count_text == '1'
     assert usa.selected is False
     korea = country_facet.get_value(Country.Values.korea)
     assert korea.count == 1
+    assert korea.count_text == '1'
     assert korea.selected is False
 
 
@@ -60,9 +67,11 @@ async def test_int_attrs_single_selected_facet(es_index, products):
     assert len(manufacturer_facet.selected_values) == 0
     huawei = manufacturer_facet.get_value(Manufacturer.Values.huawei)
     assert huawei.count == 2
+    assert huawei.count_text == '2'
     assert huawei.selected is False
     xiaomi = manufacturer_facet.get_value(Manufacturer.Values.xiaomi)
     assert xiaomi.count == 1
+    assert xiaomi.count_text == '1'
     assert xiaomi.selected is False
 
     country_facet = qf_res.attrs.get_facet(Country.attr_id)
@@ -70,12 +79,15 @@ async def test_int_attrs_single_selected_facet(es_index, products):
     assert len(country_facet.selected_values) == 1
     china = country_facet.get_value(Country.Values.china)
     assert china.count == 3
+    assert china.count_text == '3'
     assert china.selected is True
     usa = country_facet.get_value(Country.Values.usa)
     assert usa.count == 1
+    assert usa.count_text == '+1'
     assert usa.selected is False
     korea = country_facet.get_value(Country.Values.korea)
     assert korea.count == 1
+    assert korea.count_text == '+1'
     assert korea.selected is False
 
 
@@ -99,16 +111,20 @@ async def test_int_attrs_multiple_selected_facets(es_index, products):
     assert len(manufacturer_facet.all_values) == 2
     huawei = manufacturer_facet.get_value(Manufacturer.Values.huawei)
     assert huawei.count == 2
+    assert huawei.count_text == '2'
     assert huawei.selected is True
     xiaomi = manufacturer_facet.get_value(Manufacturer.Values.xiaomi)
     assert xiaomi.count == 1
+    assert xiaomi.count_text == '+1'
     assert xiaomi.selected is False
 
     country_facet = qf_res.attrs.get_facet(Country.attr_id)
     assert len(country_facet.all_values) == 2
     china = country_facet.get_value(Country.Values.china)
     assert china.count == 2
+    assert china.count_text == '2'
     assert china.selected is True
     usa = country_facet.get_value(Country.Values.usa)
     assert usa.count == 1
+    assert usa.count_text == '+1'
     assert usa.selected is False
