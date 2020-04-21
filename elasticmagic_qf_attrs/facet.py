@@ -2,16 +2,22 @@ import typing as t
 
 from elasticmagic import agg
 from elasticmagic import Bool
-from elasticmagic import Field
+from elasticmagic import Range
+from elasticmagic import Script
 from elasticmagic import SearchQuery
 from elasticmagic.expression import Expression
+from elasticmagic.expression import FieldOperators
 from elasticmagic.result import SearchResult
 
 from .facet_result import AttrFacetFilterResult
+from .facet_result import AttrRangeFacet
+from .facet_result import AttrRangeFacetFilterResult
 from .facet_result import AttrFacetValue
 from .simple import AttrBoolSimpleFilter
+from .simple import AttrRangeSimpleFilter
 from .simple import AttrIntSimpleFilter
 from .simple import BaseAttrSimpleFilter
+from .simple import Params
 from .util import merge_attr_value_bool
 from .util import merge_attr_value_int
 from .util import split_attr_value_bool
@@ -19,6 +25,13 @@ from .util import split_attr_value_int
 
 
 T = t.TypeVar('T')
+
+
+def _parse_attr_id_from_agg_name(agg_name: str) -> t.Optional[int]:
+    try:
+        return int(agg_name.rpartition(':')[2])
+    except ValueError:
+        return None
 
 
 class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
@@ -112,26 +125,21 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
 
         return search_query.aggs(aggs)
 
-    @staticmethod
-    def _parse_attr_id_from_agg_name(agg_name: str) -> t.Optional[int]:
-        try:
-            return int(agg_name.rpartition(':')[2])
-        except ValueError:
-            return None
-
     def _process_result(
-            self, result: SearchResult, params: t.Dict
-    ) -> 'AttrFacetFilterResult[T]':
+            self, result: SearchResult, params: Params
+    ) -> AttrFacetFilterResult[T]:
         facet_result = self._result_cls(self.name, self.alias)
 
         selected_attr_values = {}
         for selected_attr_id, w in self._iter_attr_values(params):
-            selected_attr_values[selected_attr_id] = set(self._parse_values(w))
+            selected_attr_values[selected_attr_id] = set(
+                self._parse_values(w, 'exact')
+            )
 
         processed_attr_ids = set()
         for agg_name, attr_agg in result.aggregations.items():
             if agg_name.startswith(f'{self._filter_agg_name}:'):
-                attr_id = self._parse_attr_id_from_agg_name(agg_name)
+                attr_id = _parse_attr_id_from_agg_name(agg_name)
                 if attr_id is not None:
                     agg_name = f'{self._agg_name}:{attr_id}'
                     attr_agg = attr_agg.get_aggregation(agg_name)
@@ -139,7 +147,7 @@ class BaseAttrFacetFilter(BaseAttrSimpleFilter, t.Generic[T]):
             if not agg_name.startswith(f'{self._agg_name}:'):
                 continue
 
-            attr_id = self._parse_attr_id_from_agg_name(agg_name)
+            attr_id = _parse_attr_id_from_agg_name(agg_name)
             if attr_id is None:
                 continue
             selected_values = selected_attr_values.get(attr_id) or set()
@@ -182,7 +190,7 @@ class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
     _attr_id_meta_key = 'int_attr_id'
 
     def __init__(
-            self, name: str, field: Field, alias: t.Optional[str] = None,
+            self, name: str, field: FieldOperators, alias: t.Optional[str] = None,
             full_agg_size: int = 10_000, single_agg_size: int = 100,
             attrs_values_getter: t.Optional[AttrsValuesGetter] = None,
     ):
@@ -214,7 +222,7 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
     _attr_id_meta_key = 'bool_attr_id'
 
     def __init__(
-            self, name: str, field: Field, alias: t.Optional[str] = None,
+            self, name: str, field: FieldOperators, alias: t.Optional[str] = None,
             full_agg_size: int = 100, single_agg_size: int = 2,
     ):
         super().__init__(name, field, alias=alias)
@@ -234,3 +242,118 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
                 merge_attr_value_bool(attr_id, True),
             ]
         return attrs_values
+
+
+class AttrRangeFacetFilter(AttrRangeSimpleFilter):
+    _attr_id_meta_key = 'float_attr_id'
+
+    def _apply_filter_expression(
+            self, search_query: SearchQuery, expr: Expression, attr_id: int
+    ) -> None:
+        return search_query.post_filter(
+            expr,
+            meta={
+                'tags': {self.name, f'{self.alias}:{attr_id}'},
+                self._attr_id_meta_key: attr_id
+            }
+        )
+
+    def _agg_name(self, attr_id: t.Optional[int] = None) -> str:
+        agg_name = f'{self.qf._name}.{self.name}'
+        if attr_id is not None:
+            return f'{agg_name}:{attr_id}'
+        return agg_name
+
+    def _filter_agg_name(self) -> str:
+        return f'{self._agg_name()}.filter'
+
+    def _apply_agg(self, search_query: SearchQuery) -> SearchQuery:
+        aggs = {}
+
+        exclude_tags = {self.qf._name}
+        filters = self._get_agg_filters(
+            search_query.get_context().iter_post_filters_with_meta(),
+            exclude_tags
+        )
+
+        full_terms_agg = agg.Terms(
+            script=Script(
+                'doc[params.field].value >>> 32',
+                lang='painless',
+                params={
+                    'field': self.field,
+                }
+            ),
+            size=100
+        )
+        if filters:
+            aggs[self._filter_agg_name()] = agg.Filter(
+                Bool.must(*filters),
+                aggs={self._agg_name(): full_terms_agg}
+            )
+        else:
+            aggs[self._agg_name()] = full_terms_agg
+
+        post_filters = list(
+            search_query.get_context().iter_post_filters_with_meta()
+        )
+        for filt, meta in post_filters:
+            if not meta:
+                continue
+            selected_attr_id = meta.get(self._attr_id_meta_key)
+            if selected_attr_id is None:
+                continue
+
+            filters = [
+                f for f, m in post_filters
+                if m.get(self._attr_id_meta_key) != selected_attr_id
+            ]
+            filters.append(
+                Range(
+                    self.field,
+                    gte=merge_attr_value_int(selected_attr_id, 0),
+                    lte=merge_attr_value_int(selected_attr_id, 0xffff_ffff)
+                )
+            )
+            aggs[self._agg_name(selected_attr_id)] = agg.Filter(
+                Bool.must(*filters)
+            )
+
+        return search_query.aggs(aggs)
+
+    def _process_result(
+            self, result: SearchResult, params: t.Dict
+    ) -> AttrRangeFacetFilterResult:
+        facet_result = AttrRangeFacetFilterResult(self.name, self.alias)
+
+        selected_attr_ids = set()
+        for selected_attr_id, w in self._iter_attr_values(params):
+            if (
+                    self._parse_last_value(w, 'gte') is not None or
+                    self._parse_last_value(w, 'lte') is not None
+            ):
+                selected_attr_ids.add(selected_attr_id)
+
+        main_agg = result.get_aggregation(self._agg_name())
+        if main_agg is None:
+            main_agg = result.get_aggregation(self._filter_agg_name()) \
+                .get_aggregation(self._agg_name())
+        for bucket in main_agg.buckets:
+            attr_id = int(bucket.key)
+            facet_result.add_facet(
+                AttrRangeFacet(
+                    attr_id,
+                    bucket.doc_count,
+                    attr_id in selected_attr_ids
+                )
+            )
+
+        for selected_attr_id in selected_attr_ids:
+            selected_agg = result.get_aggregation(
+                self._agg_name(selected_attr_id)
+            )
+            facet_result.add_facet(
+                AttrRangeFacet(selected_attr_id, selected_agg.doc_count, True)
+            )
+
+        return facet_result
