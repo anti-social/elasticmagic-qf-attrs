@@ -190,8 +190,10 @@ class AttrIntFacetFilter(AttrIntSimpleFilter, BaseAttrFacetFilter[int]):
     _attr_id_meta_key = 'int_attr_id'
 
     def __init__(
-            self, name: str, field: FieldOperators, alias: t.Optional[str] = None,
-            full_agg_size: int = 10_000, single_agg_size: int = 100,
+            self, name: str, field: FieldOperators,
+            alias: t.Optional[str] = None,
+            full_agg_size: int = 10_000,
+            single_agg_size: int = 100,
             attrs_values_getter: t.Optional[AttrsValuesGetter] = None,
     ):
         super().__init__(name, field, alias=alias)
@@ -222,8 +224,10 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
     _attr_id_meta_key = 'bool_attr_id'
 
     def __init__(
-            self, name: str, field: FieldOperators, alias: t.Optional[str] = None,
-            full_agg_size: int = 100, single_agg_size: int = 2,
+            self, name: str, field: FieldOperators,
+            alias: t.Optional[str] = None,
+            full_agg_size: int = 100,
+            single_agg_size: int = 2,
     ):
         super().__init__(name, field, alias=alias)
         self.full_agg_size = full_agg_size
