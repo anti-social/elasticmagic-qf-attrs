@@ -59,3 +59,22 @@ class AttrFacetFilterResult(BaseFilterResult, t.Generic[T]):
 
     def get_facet(self, attr_id: int) -> t.Optional[AttrFacet[T]]:
         return self.facets.get(attr_id)
+
+
+class AttrRangeFacet:
+    def __init__(self, attr_id: int, count: int, selected: bool):
+        self.attr_id = attr_id
+        self.count = count
+        self.selected = selected
+
+
+class AttrRangeFacetFilterResult(BaseFilterResult):
+    def __init__(self, name: str, alias: str):
+        super().__init__(name, alias)
+        self.facets: t.Dict[int, AttrRangeFacet] = {}
+
+    def add_facet(self, facet: AttrRangeFacet) -> None:
+        self.facets[facet.attr_id] = facet
+
+    def get_facet(self, attr_id: int) -> t.Optional[AttrRangeFacet]:
+        return self.facets.get(attr_id)

@@ -5,7 +5,7 @@ from elasticmagic.ext.queryfilter import QueryFilter
 
 from elasticmagic_qf_attrs.facet import AttrBoolFacetFilter
 from elasticmagic_qf_attrs.facet import AttrIntFacetFilter
-from elasticmagic_qf_attrs.simple import AttrFloatSimpleFilter
+from elasticmagic_qf_attrs.simple import AttrRangeSimpleFilter
 
 import pytest
 
@@ -20,7 +20,7 @@ def qf():
         AttrIntFacetFilter('attr_int', Field('attr.int'), alias='a')
     )
     qf.add_filter(
-        AttrFloatSimpleFilter('attr_float', Field('attr.float'), alias='a')
+        AttrRangeSimpleFilter('attr_float', Field('attr.float'), alias='a')
     )
     yield qf
 

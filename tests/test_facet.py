@@ -1,13 +1,16 @@
 from elasticmagic import agg
-from elasticmagic import Bool, Field, Range, Term, Terms
+from elasticmagic import Bool, Field, Range, Script, Term, Terms
 from elasticmagic import SearchQuery
 from elasticmagic.ext.queryfilter import QueryFilter
 from elasticmagic.result import SearchResult
 
 from elasticmagic_qf_attrs.facet import AttrBoolFacetFilter
+from elasticmagic_qf_attrs.facet import AttrRangeFacetFilter
 from elasticmagic_qf_attrs.facet import AttrIntFacetFilter
 
 import pytest
+
+from .conftest import assert_search_query
 
 
 @pytest.fixture
@@ -34,6 +37,15 @@ def bool_qf():
     qf = QueryFilter()
     qf.add_filter(
         AttrBoolFacetFilter('attr_bool', Field('attr.bool'), alias='a')
+    )
+    yield qf
+
+
+@pytest.fixture
+def range_qf():
+    qf = QueryFilter()
+    qf.add_filter(
+        AttrRangeFacetFilter('attr_range', Field('attr.float'), alias='a')
     )
     yield qf
 
@@ -622,3 +634,220 @@ def test_attr_bool_facet_filter__multiple_selected_values(bool_qf, compiler):
     assert facet.all_values[0].count == 1
     assert facet.all_values[0].count_text == '1'
     assert facet.all_values[0].selected is True
+
+
+def test_attr_float_facet_filter__empty(range_qf, compiler):
+    sq = range_qf.apply(SearchQuery(), {})
+    assert_search_query(
+        sq,
+        SearchQuery().aggs({
+            'qf.attr_range': agg.Terms(
+                script=Script(
+                    'doc[params.field].value >>> 32',
+                    lang='painless',
+                    params={
+                        'field': 'attr.float',
+                    }
+                ),
+                size=100
+            ),
+        }),
+        compiler
+    )
+
+    qf_res = range_qf.process_results(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_range': {
+                    'buckets': [
+                        {
+                            'key': '8',
+                            'doc_count': 84
+                        },
+                        {
+                            'key': '439',
+                            'doc_count': 28
+                        }
+                    ]
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert qf_res.attr_range.name == 'attr_range'
+    assert qf_res.attr_range.alias == 'a'
+    f = qf_res.attr_range.get_facet(8)
+    assert f.attr_id == 8
+    assert f.count == 84
+    assert f.selected is False
+    f = qf_res.attr_range.get_facet(439)
+    assert f.attr_id == 439
+    assert f.count == 28
+    assert f.selected is False
+
+
+def test_attr_float_facet_filter__single_selected_filter(range_qf, compiler):
+    sq = range_qf.apply(SearchQuery(), {'a8__gte': 2.71})
+    assert_search_query(
+        sq,
+        SearchQuery()
+        .aggs({
+            'qf.attr_range.filter': agg.Filter(
+                Range('attr.float', gte=0x8_402d70a4, lte=0x8_7f800000),
+                aggs={
+                    'qf.attr_range': agg.Terms(
+                        script=Script(
+                            'doc[params.field].value >>> 32',
+                            lang='painless',
+                            params={
+                                'field': 'attr.float',
+                            }
+                        ),
+                        size=100
+                    )
+                }
+            ),
+            'qf.attr_range:8': agg.Filter(
+                Range('attr.float', gte=0x8_00000000, lte=0x8_ffffffff),
+            )
+        })
+        .post_filter(Range('attr.float', gte=0x8_402d70a4, lte=0x8_7f800000)),
+        compiler
+    )
+
+    qf_res = range_qf.process_results(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_range.filter': {
+                    'doc_count': 32,
+                    'qf.attr_range': {
+                        'buckets': [
+                            {
+                                'key': 8,
+                                'doc_count': 32
+                            },
+                            {
+                                'key': 439,
+                                'doc_count': 18
+                            }
+                        ]
+                    }
+                },
+                'qf.attr_range:8': {
+                    'doc_count': 84
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert qf_res.attr_range.name == 'attr_range'
+    assert qf_res.attr_range.alias == 'a'
+    f = qf_res.attr_range.get_facet(8)
+    assert f.attr_id == 8
+    assert f.count == 84
+    assert f.selected is True
+    f = qf_res.attr_range.get_facet(439)
+    assert f.attr_id == 439
+    assert f.count == 18
+    assert f.selected is False
+
+
+def test_attr_float_facet_filter__multiple_selected_filters(
+        range_qf, compiler
+):
+    sq = range_qf.apply(SearchQuery(), {'a8__gte': 2.71, 'a99__lte': 3.14})
+    assert_search_query(
+        sq,
+        SearchQuery()
+        .aggs({
+            'qf.attr_range.filter': agg.Filter(
+                Bool.must(
+                    Range('attr.float', gte=0x8_402d70a4, lte=0x8_7f800000),
+                    Bool.should(
+                        Range(
+                            'attr.float', gte=0x63_00000000, lte=0x63_4048f5c3
+                        ),
+                        Range(
+                            'attr.float', gte=0x63_80000000, lte=0x63_ff800000
+                        )
+                    )
+                ),
+                aggs={
+                    'qf.attr_range': agg.Terms(
+                        script=Script(
+                            'doc[params.field].value >>> 32',
+                            lang='painless',
+                            params={
+                                'field': 'attr.float',
+                            }
+                        ),
+                        size=100
+                    )
+                }
+            ),
+            'qf.attr_range:8': agg.Filter(
+                Bool.must(
+                    Bool.should(
+                        Range(
+                            'attr.float', gte=0x63_00000000, lte=0x63_4048f5c3
+                        ),
+                        Range(
+                            'attr.float', gte=0x63_80000000, lte=0x63_ff800000
+                        )
+                    ),
+                    Range('attr.float', gte=0x8_00000000, lte=0x8_ffffffff)
+                )
+            ),
+            'qf.attr_range:99': agg.Filter(
+                Bool.must(
+                    Range('attr.float', gte=0x8_402d70a4, lte=0x8_7f800000),
+                    Range('attr.float', gte=0x63_00000000, lte=0x63_ffffffff)
+                )
+            ),
+        })
+        .post_filter(Range('attr.float', gte=0x8_402d70a4, lte=0x8_7f800000))
+        .post_filter(Bool.should(
+            Range('attr.float', gte=0x63_00000000, lte=0x63_4048f5c3),
+            Range('attr.float', gte=0x63_80000000, lte=0x63_ff800000)
+        )),
+        compiler
+    )
+
+    qf_res = range_qf.process_results(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_range.filter': {
+                    'doc_count': 32,
+                    'qf.attr_range': {
+                        'buckets': [
+                            {
+                                'key': 8,
+                                'doc_count': 32
+                            },
+                            {
+                                'key': 99,
+                                'doc_count': 18
+                            }
+                        ]
+                    }
+                },
+                'qf.attr_range:8': {
+                    'doc_count': 84
+                },
+                'qf.attr_range:99': {
+                    'doc_count': 33
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert qf_res.attr_range.name == 'attr_range'
+    assert qf_res.attr_range.alias == 'a'
+    f = qf_res.attr_range.get_facet(8)
+    assert f.attr_id == 8
+    assert f.count == 84
+    assert f.selected is True
+    f = qf_res.attr_range.get_facet(99)
+    assert f.attr_id == 99
+    assert f.count == 33
+    assert f.selected is True

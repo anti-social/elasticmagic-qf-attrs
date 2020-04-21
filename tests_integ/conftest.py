@@ -67,6 +67,13 @@ async def products(es_index):
         ),
         ProductDoc(
             _id=next(ids),
+            model='Galaxy S10',
+            attrs=[Manufacturer.samsung, Country.korea],
+            attrs_bool=[Waterproof.yes()],
+            attrs_range=[Display.value(6.1)],
+        ),
+        ProductDoc(
+            _id=next(ids),
             model='P smart Z',
             attrs=[Manufacturer.huawei, Country.china],
             attrs_bool=[Waterproof.no()],
@@ -84,6 +91,13 @@ async def products(es_index):
             model='Mi MIX',
             attrs=[Manufacturer.xiaomi, Country.china],
             attrs_range=[Display.value(6.4)],
+        ),
+        ProductDoc(
+            _id=next(ids),
+            model='Redmi Note 8T',
+            attrs=[Manufacturer.xiaomi, Country.china],
+            attrs_bool=[Waterproof.yes()],
+            attrs_range=[Display.value(6.3)],
         ),
     ]
     yield await es_index.add(products, refresh=True)
