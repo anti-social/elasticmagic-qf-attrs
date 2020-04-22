@@ -1,8 +1,22 @@
 [tool.poetry]
 name = "elasticmagic-qf-attrs"
-version = "0.1.0"
+version = "0.0.0"
+license = "Apache License 2.0"
 description = ""
 authors = ["Alexander Koval <kovalidis@gmail.com>"]
+maintainers = ["Alexander Koval <kovalidis@gmail.com>"]
+readme = "README.rst"
+homepage = "https://github.com/anti-social/elasticmagic-qf-attrs"
+repository = "https://github.com/anti-social/elasticmagic-qf-attrs"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 [tool.poetry.dependencies]
 python = "^3.7"

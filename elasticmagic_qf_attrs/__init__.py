@@ -1,5 +1,3 @@
-__version__ = '0.1.0'
-
 from .facet import AttrIntFacetFilter
 from .facet import AttrBoolFacetFilter
 from .facet import AttrRangeFacetFilter
@@ -16,3 +14,5 @@ __all__ = [
     'AttrRangeSimpleFilter',
     'AttrRangeFacetFilter',
 ]
+
+__version__ = '0.0.0'
