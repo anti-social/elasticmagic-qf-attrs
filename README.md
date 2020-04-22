@@ -179,6 +179,9 @@ from elasticmagic.ext.queryfilter import QueryFilter
 from elasticmagic_qf_attrs import AttrBoolFacetFilter
 from elasticmagic_qf_attrs import AttrIntFacetFilter
 from elasticmagic_qf_attrs import AttrRangeFacetFilter
+from elasticmagic_qf_attrs.util import merge_attr_value_bool
+from elasticmagic_qf_attrs.util import merge_attr_value_float
+from elasticmagic_qf_attrs.util import merge_attr_value_int
 
 # Specify document
 class AttrsDocument(Document):
@@ -199,10 +202,13 @@ index.put_mapping(AttrsDocument)
 # Index example document
 index.add([
     AttrsDocument(
-        ints=[0x1_0000002a, 0x2_0000002b],
-        bools=[0x7],
-        floats=[0x4_42c7cccd],
-    )
+        ints=[
+            merge_attr_value_int(1, 42),
+            merge_attr_value_int(2, 43),
+        ],
+        bools=[merge_attr_value_bool(3, True)],
+        floats=[merge_attr_value_float(4, 99.9)],
+    ),
 ], refresh=True)
 
 # Define a query filter
