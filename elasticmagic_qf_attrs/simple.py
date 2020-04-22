@@ -7,7 +7,6 @@ from elasticmagic import types
 from elasticmagic.expression import Expression, FieldOperators
 from elasticmagic.ext.queryfilter.queryfilter import BaseFilter
 
-from elasticmagic.ext.queryfilter.codec import BoolCodec
 from elasticmagic.ext.queryfilter.codec import FloatCodec
 from elasticmagic.ext.queryfilter.codec import IntCodec
 
@@ -21,7 +20,6 @@ Params = t.Dict[str, ParamValues]
 
 T = t.TypeVar('T')
 
-bool_codec = BoolCodec()
 float_codec = FloatCodec()
 int_codec = IntCodec()
 
@@ -102,7 +100,11 @@ class AttrIntSimpleFilter(BaseAttrSimpleFilter[int]):
 class AttrBoolSimpleFilter(BaseAttrSimpleFilter[bool]):
     @staticmethod
     def _parse_value(v: str) -> bool:
-        return bool_codec.decode(v)
+        if v == 'true' or v == 'True':
+            return True
+        if v == 'false' or v == 'False':
+            return False
+        raise ValueError(f'Cannot parse boolean value: {v}')
 
     def _get_filter_expression(
             self, attr_id: int, values: ParamValues

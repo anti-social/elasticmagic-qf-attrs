@@ -158,13 +158,26 @@ def test_attr_bool_simple_filter(compiler):
         .to_dict(compiler=compiler)
     )
 
-    # FIXME
-    # sq = qf.apply(SearchQuery(), {'a1': [True]})
-    # assert sq.to_dict(compiler=compiler) == (
-    #     SearchQuery()
-    #     .filter(Term('attr.bool', 0x3))
-    #     .to_dict(compiler=compiler)
-    # )
+    sq = qf.apply(SearchQuery(), {'a1': 'True'})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .filter(Term('attr.bool', 0x3))
+        .to_dict(compiler=compiler)
+    )
+
+    sq = qf.apply(SearchQuery(), {'a1': [True]})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .filter(Term('attr.bool', 0x3))
+        .to_dict(compiler=compiler)
+    )
+
+    sq = qf.apply(SearchQuery(), {'a1': 'False'})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+        .filter(Term('attr.bool', 0x2))
+        .to_dict(compiler=compiler)
+    )
 
     sq = qf.apply(SearchQuery(), {'a1': ['true', 'false']})
     assert sq.to_dict(compiler=compiler) == (
@@ -184,5 +197,5 @@ def test_attr_bool_simple_filter(compiler):
     sq = qf.apply(SearchQuery(), {'a2147483648': '1'})
     assert sq.to_dict(compiler=compiler) == {}
 
-    sq = qf.apply(SearchQuery(), {'a1': 'True'})
+    sq = qf.apply(SearchQuery(), {'a1': 'TRUE'})
     assert sq.to_dict(compiler=compiler) == {}
