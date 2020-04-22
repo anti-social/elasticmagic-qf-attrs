@@ -282,6 +282,13 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
 
         full_terms_agg = agg.Terms(
             script=Script(
+                # It is possible to use value script with a field
+                # but `_value` variable has double type
+                # that can lead to round error when casting to long:
+                # '((long) _value) >>> 32'
+                # See:
+                # https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-terms-aggregation.html#_value_script_9
+                # https://github.com/elastic/elasticsearch/issues/54655
                 'doc[params.field].value >>> 32',
                 lang='painless',
                 params={
