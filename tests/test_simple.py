@@ -69,8 +69,8 @@ def test_attr_int_simple_filter_no_alias(compiler):
     sq = qf.apply(SearchQuery(), {'attr18': '1234'})
     assert sq.to_dict(compiler=compiler) == (
         SearchQuery()
-            .filter(Term('attr.int', 0x12_000004d2))
-            .to_dict(compiler=compiler)
+        .filter(Term('attr.int', 0x12_000004d2))
+        .to_dict(compiler=compiler)
     )
 
 
