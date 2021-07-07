@@ -54,6 +54,26 @@ def test_attr_int_simple_filter(compiler):
     assert sq.to_dict(compiler=compiler) == {}
 
 
+def test_attr_int_simple_filter_no_alias(compiler):
+    qf = QueryFilter()
+    qf.add_filter(
+        AttrIntSimpleFilter('attr', Field('attr.int'))
+    )
+
+    sq = qf.apply(SearchQuery(), {})
+    assert sq.to_dict(compiler=compiler) == {}
+
+    sq = qf.apply(SearchQuery(), {'a18': '224'})
+    assert sq.to_dict(compiler=compiler) == {}
+
+    sq = qf.apply(SearchQuery(), {'attr18': '1234'})
+    assert sq.to_dict(compiler=compiler) == (
+        SearchQuery()
+            .filter(Term('attr.int', 0x12_000004d2))
+            .to_dict(compiler=compiler)
+    )
+
+
 def test_attr_range_simple_filter(compiler):
     qf = QueryFilter()
     qf.add_filter(

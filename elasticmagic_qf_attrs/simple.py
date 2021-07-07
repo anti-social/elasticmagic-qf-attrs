@@ -36,7 +36,7 @@ class BaseAttrSimpleFilter(ABC, BaseFilter, t.Generic[T]):
             if not k.startswith(self.alias):
                 continue
             try:
-                attr_id = int_codec.decode(k[1:], es_type=types.Integer)
+                attr_id = int_codec.decode(k[len(self.alias):], es_type=types.Integer)
             except ValueError:
                 continue
             yield (attr_id, w)
