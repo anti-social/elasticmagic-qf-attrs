@@ -4,7 +4,7 @@ from itertools import count
 
 from elasticmagic.ext.asyncio import AsyncCluster
 
-from elasticsearch_async import AsyncElasticsearch
+from elasticsearch import AsyncElasticsearch
 
 import pytest
 
