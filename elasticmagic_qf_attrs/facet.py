@@ -27,6 +27,18 @@ from .util import split_attr_value_int
 T = t.TypeVar('T')
 
 
+RANGE_ATTR_SCRIPT = '''
+int attrsLen = doc[params.field].size();
+List values = doc[params.field];
+
+int[] attrIds = new int[attrsLen];
+for (int i = 0; i < attrsLen; i++) {
+    attrIds[i] = (int) (values[i] >>> 32);
+}
+return attrIds;
+'''
+
+
 def _parse_attr_id_from_agg_name(agg_name: str) -> t.Optional[int]:
     try:
         return int(agg_name.rpartition(':')[2])
@@ -282,16 +294,7 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
 
         full_terms_agg = agg.Terms(
             script=Script(
-                '''
-                int attrsLen = doc[params.field].size();
-                List values = doc[params.field];
-
-                int[] attrIds = new int[attrsLen];
-                for (int i = 0; i < attrsLen; i++) {
-                    attrIds[i] = (int) (values[i] >>> 32);
-                }
-                return attrIds;
-                ''',
+                RANGE_ATTR_SCRIPT,
                 lang='painless',
                 params={
                     'field': self.field,

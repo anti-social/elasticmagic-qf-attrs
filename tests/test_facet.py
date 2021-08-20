@@ -7,6 +7,7 @@ from elasticmagic.result import SearchResult
 from elasticmagic_qf_attrs.facet import AttrBoolFacetFilter
 from elasticmagic_qf_attrs.facet import AttrRangeFacetFilter
 from elasticmagic_qf_attrs.facet import AttrIntFacetFilter
+from elasticmagic_qf_attrs.facet import RANGE_ATTR_SCRIPT
 
 import pytest
 
@@ -649,7 +650,7 @@ def test_attr_range_facet_filter__existing_post_filter(range_qf, compiler):
                 aggs={
                     'qf.attr_range': agg.Terms(
                         script=Script(
-                            'doc[params.field].value >>> 32',
+                            RANGE_ATTR_SCRIPT,
                             lang='painless',
                             params={
                                 'field': 'attr.float',
@@ -671,7 +672,7 @@ def test_attr_range_facet_filter__empty(range_qf, compiler):
         SearchQuery().aggs({
             'qf.attr_range': agg.Terms(
                 script=Script(
-                    'doc[params.field].value >>> 32',
+                    RANGE_ATTR_SCRIPT,
                     lang='painless',
                     params={
                         'field': 'attr.float',
@@ -725,7 +726,7 @@ def test_attr_range_facet_filter__single_selected_filter(range_qf, compiler):
                 aggs={
                     'qf.attr_range': agg.Terms(
                         script=Script(
-                            'doc[params.field].value >>> 32',
+                            RANGE_ATTR_SCRIPT,
                             lang='painless',
                             params={
                                 'field': 'attr.float',
@@ -803,7 +804,7 @@ def test_attr_range_facet_filter__multiple_selected_filters(
                 aggs={
                     'qf.attr_range': agg.Terms(
                         script=Script(
-                            'doc[params.field].value >>> 32',
+                            RANGE_ATTR_SCRIPT,
                             lang='painless',
                             params={
                                 'field': 'attr.float',
