@@ -206,7 +206,7 @@ async def test_facet__selected_range_facet(es_index, products):
     sq = qf.apply(
         es_index.search_query(),
         {
-            f'a{Display.attr_id}__gte': f'6.5'
+            f'a{Display.attr_id}__gte': '6.5'
         }
     )
 
@@ -262,7 +262,7 @@ async def test_facets__different_selected_facets(es_index, products):
                 f'{Manufacturer.Values.samsung}',
             ],
             f'a{Waterproof.attr_id}': 'true',
-            f'a{Display.attr_id}__lte': f'6.5',
+            f'a{Display.attr_id}__lte': '6.5',
         }
     )
 
