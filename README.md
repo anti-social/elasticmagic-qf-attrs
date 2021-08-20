@@ -1,3 +1,5 @@
+[![Test and build](https://github.com/anti-social/elasticmagic-qf-attrs/actions/workflows/python.yaml/badge.svg)](https://github.com/anti-social/elasticmagic-qf-attrs/actions/workflows/python.yaml)
+
 Elasticmagic query filters for attributes
 =========================================
 
