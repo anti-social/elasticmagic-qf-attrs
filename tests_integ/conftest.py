@@ -54,7 +54,7 @@ async def es_index(es_cluster, es_client, index_name):
     es_index = es_cluster[index_name]
     await es_index.put_mapping(ProductDoc)
     yield es_index
-    # await es_client.indices.delete(index=index_name)
+    await es_client.indices.delete(index=index_name)
 
 
 @pytest.fixture

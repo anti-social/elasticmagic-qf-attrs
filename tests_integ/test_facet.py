@@ -225,7 +225,6 @@ async def test_facet__selected_range_facet(es_index, products):
             f'a{Display.attr_id}__gte': '6.5'
         }
     )
-    print(await sq.to_dict())
 
     res = await sq.get_result()
     assert res.total == 2
