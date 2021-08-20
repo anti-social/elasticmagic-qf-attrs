@@ -6,6 +6,7 @@ from elasticmagic_qf_attrs import AttrBoolFacetFilter
 from elasticmagic_qf_attrs import AttrRangeFacetFilter
 from elasticmagic_qf_attrs import AttrIntFacetFilter
 
+from .attrs import Battery
 from .attrs import Country
 from .attrs import Display
 from .attrs import Manufacturer
@@ -80,6 +81,11 @@ async def test_facets(es_index, products):
     assert display_facet.count == 7
     assert display_facet.selected is False
 
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 6
+    assert battery_facet.selected is False
+
 
 @pytest.mark.asyncio
 async def test_int_attrs__single_int_facet(es_index, products):
@@ -138,6 +144,11 @@ async def test_int_attrs__single_int_facet(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 4
     assert display_facet.selected is False
+
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 4
+    assert battery_facet.selected is False
 
 
 @pytest.mark.asyncio
@@ -198,6 +209,11 @@ async def test_facet__multiple_selected_int_values(es_index, products):
     assert display_facet.count == 2
     assert display_facet.selected is False
 
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 2
+    assert battery_facet.selected is False
+
 
 @pytest.mark.asyncio
 async def test_facet__selected_range_facet(es_index, products):
@@ -209,6 +225,7 @@ async def test_facet__selected_range_facet(es_index, products):
             f'a{Display.attr_id}__gte': '6.5'
         }
     )
+    print(await sq.to_dict())
 
     res = await sq.get_result()
     assert res.total == 2
@@ -248,6 +265,11 @@ async def test_facet__selected_range_facet(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 7
     assert display_facet.selected is True
+
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 1
+    assert battery_facet.selected is False
 
 
 @pytest.mark.asyncio
@@ -307,3 +329,8 @@ async def test_facets__different_selected_facets(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 2
     assert display_facet.selected is True
+
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 2
+    assert battery_facet.selected is False

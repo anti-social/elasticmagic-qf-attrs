@@ -8,6 +8,7 @@ from elasticsearch import AsyncElasticsearch
 
 import pytest
 
+from .attrs import Battery
 from .attrs import Country
 from .attrs import Display
 from .attrs import Manufacturer
@@ -40,11 +41,20 @@ def es_cluster(es_client):
 
 @pytest.fixture
 async def es_index(es_cluster, es_client, index_name):
-    await es_client.indices.create(index=index_name)
+    await es_client.indices.create(
+        index=index_name,
+        body={
+            'settings': {
+                'index': {
+                    'number_of_replicas': 0,
+                }
+            }
+        }
+    )
     es_index = es_cluster[index_name]
     await es_index.put_mapping(ProductDoc)
     yield es_index
-    await es_client.indices.delete(index=index_name)
+    # await es_client.indices.delete(index=index_name)
 
 
 @pytest.fixture
@@ -63,41 +73,41 @@ async def products(es_index):
             model='Galaxy A20',
             attrs=[Manufacturer.samsung, Country.korea],
             attrs_bool=[Waterproof.no()],
-            attrs_range=[Display.value(6.4)],
+            attrs_range=[Display.value(6.4), Battery.value(4000)],
         ),
         ProductDoc(
             _id=next(ids),
             model='Galaxy S10',
             attrs=[Manufacturer.samsung, Country.korea],
             attrs_bool=[Waterproof.yes()],
-            attrs_range=[Display.value(6.1)],
+            attrs_range=[Display.value(6.1), Battery.value(4000)],
         ),
         ProductDoc(
             _id=next(ids),
             model='P smart Z',
             attrs=[Manufacturer.huawei, Country.china],
             attrs_bool=[Waterproof.no()],
-            attrs_range=[Display.value(6.59)],
+            attrs_range=[Display.value(6.59), Battery.value(4000)],
         ),
         ProductDoc(
             _id=next(ids),
             model='P30 Pro',
             attrs=[Manufacturer.huawei, Country.china],
             attrs_bool=[Waterproof.yes()],
-            attrs_range=[Display.value(6.47)],
+            attrs_range=[Display.value(6.47), Battery.value(4200)],
         ),
         ProductDoc(
             _id=next(ids),
             model='Mi MIX',
             attrs=[Manufacturer.xiaomi, Country.china],
-            attrs_range=[Display.value(6.4)],
+            attrs_range=[Display.value(6.4), Battery.value(4400)],
         ),
         ProductDoc(
             _id=next(ids),
             model='Redmi Note 8T',
             attrs=[Manufacturer.xiaomi, Country.china],
             attrs_bool=[Waterproof.yes()],
-            attrs_range=[Display.value(6.3)],
+            attrs_range=[Display.value(6.3), Battery.value(4000)],
         ),
     ]
     yield await es_index.add(products, refresh=True)

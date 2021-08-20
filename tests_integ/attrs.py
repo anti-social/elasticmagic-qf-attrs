@@ -60,3 +60,7 @@ class RangeAttr:
 
 class Display(RangeAttr):
     attr_id = 4
+
+
+class Battery(RangeAttr):
+    attr_id = 5
