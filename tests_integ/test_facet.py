@@ -20,6 +20,14 @@ class AttrsQueryFilter(QueryFilter):
     ranges = AttrRangeFacetFilter(ProductDoc.attrs_range, alias='a')
 
 
+class AttrsQueryFilterComputeMinMax(QueryFilter):
+    attrs = AttrIntFacetFilter(ProductDoc.attrs, alias='a')
+    bools = AttrBoolFacetFilter(ProductDoc.attrs_bool, alias='a')
+    ranges = AttrRangeFacetFilter(
+        ProductDoc.attrs_range, alias='a', compute_min_max=True,
+    )
+
+
 @pytest.mark.asyncio
 async def test_facets(es_index, products):
     qf = AttrsQueryFilter()
@@ -80,11 +88,15 @@ async def test_facets(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 7
     assert display_facet.selected is False
+    assert display_facet.min is None
+    assert display_facet.max is None
 
     battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
     assert battery_facet.attr_id == Battery.attr_id
     assert battery_facet.count == 6
     assert battery_facet.selected is False
+    assert battery_facet.min is None
+    assert battery_facet.max is None
 
 
 @pytest.mark.asyncio
@@ -144,11 +156,15 @@ async def test_int_attrs__single_int_facet(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 4
     assert display_facet.selected is False
+    assert display_facet.min is None
+    assert display_facet.max is None
 
     battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
     assert battery_facet.attr_id == Battery.attr_id
     assert battery_facet.count == 4
     assert battery_facet.selected is False
+    assert battery_facet.min is None
+    assert battery_facet.max is None
 
 
 @pytest.mark.asyncio
@@ -208,11 +224,15 @@ async def test_facet__multiple_selected_int_values(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 2
     assert display_facet.selected is False
+    assert display_facet.min is None
+    assert display_facet.max is None
 
     battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
     assert battery_facet.attr_id == Battery.attr_id
     assert battery_facet.count == 2
     assert battery_facet.selected is False
+    assert battery_facet.min is None
+    assert battery_facet.max is None
 
 
 @pytest.mark.asyncio
@@ -264,11 +284,15 @@ async def test_facet__selected_range_facet(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 7
     assert display_facet.selected is True
+    assert display_facet.min is None
+    assert display_facet.max is None
 
     battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
     assert battery_facet.attr_id == Battery.attr_id
     assert battery_facet.count == 1
     assert battery_facet.selected is False
+    assert battery_facet.min is None
+    assert battery_facet.max is None
 
 
 @pytest.mark.asyncio
@@ -328,8 +352,74 @@ async def test_facets__different_selected_facets(es_index, products):
     assert display_facet.attr_id == Display.attr_id
     assert display_facet.count == 2
     assert display_facet.selected is True
+    assert display_facet.min is None
+    assert display_facet.max is None
 
     battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
     assert battery_facet.attr_id == Battery.attr_id
     assert battery_facet.count == 2
     assert battery_facet.selected is False
+    assert battery_facet.min is None
+    assert battery_facet.max is None
+
+
+@pytest.mark.asyncio
+async def test_facet__range_facet_compute_min_max(es_index, products):
+    qf = AttrsQueryFilterComputeMinMax()
+
+    sq = qf.apply(es_index.search_query(), {})
+
+    res = await sq.get_result()
+    assert res.total == 7
+
+    qf_res = qf.process_result(res)
+
+    display_facet = qf_res.ranges.get_facet(Display.attr_id)
+    assert display_facet.attr_id == Display.attr_id
+    assert display_facet.count == 7
+    assert display_facet.selected is False
+    assert round(display_facet.min, 1) == 6.1
+    assert round(display_facet.max, 2) == 6.59
+
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 6
+    assert battery_facet.selected is False
+    assert battery_facet.min == 4000
+    assert battery_facet.max == 4400
+
+
+@pytest.mark.asyncio
+async def test_facet__selected_range_facet_compute_min_max(
+        es_index, products,
+):
+    qf = AttrsQueryFilterComputeMinMax()
+
+    sq = qf.apply(es_index.search_query(), {
+            f'a{Manufacturer.attr_id}': [
+                f'{Manufacturer.Values.huawei}',
+                f'{Manufacturer.Values.samsung}',
+                f'{Manufacturer.Values.xiaomi}',
+            ],
+            f'a{Waterproof.attr_id}': 'true',
+            f'a{Display.attr_id}__lte': '6.45',
+        })
+
+    res = await sq.get_result()
+    assert res.total == 2
+
+    qf_res = qf.process_result(res)
+
+    display_facet = qf_res.ranges.get_facet(Display.attr_id)
+    assert display_facet.attr_id == Display.attr_id
+    assert display_facet.count == 3
+    assert display_facet.selected is True
+    assert round(display_facet.min, 1) == 6.1
+    assert round(display_facet.max, 2) == 6.47
+
+    battery_facet = qf_res.ranges.get_facet(Battery.attr_id)
+    assert battery_facet.attr_id == Battery.attr_id
+    assert battery_facet.count == 2
+    assert battery_facet.selected is False
+    assert battery_facet.min == 4000
+    assert battery_facet.max == 4200
