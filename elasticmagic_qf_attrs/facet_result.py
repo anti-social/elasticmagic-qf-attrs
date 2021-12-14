@@ -4,6 +4,8 @@ from elasticmagic.ext.queryfilter.queryfilter import BaseFilterResult
 
 
 T = t.TypeVar('T')
+TMinValue = t.Union[int, float, None]
+TMaxValue = t.Union[int, float, None]
 
 
 class AttrFacetValue(t.Generic[T]):
@@ -62,10 +64,19 @@ class AttrFacetFilterResult(BaseFilterResult, t.Generic[T]):
 
 
 class AttrRangeFacet:
-    def __init__(self, attr_id: int, count: int, selected: bool):
+    def __init__(
+        self,
+        attr_id: int,
+        count: int,
+        selected: bool,
+        min_: TMinValue = None,
+        max_: TMaxValue = None,
+    ):
         self.attr_id = attr_id
         self.count = count
         self.selected = selected
+        self.min = min_
+        self.max = max_
 
 
 class AttrRangeFacetFilterResult(BaseFilterResult):

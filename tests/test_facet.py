@@ -4,10 +4,15 @@ from elasticmagic import SearchQuery
 from elasticmagic.ext.queryfilter import QueryFilter
 from elasticmagic.result import SearchResult
 
-from elasticmagic_qf_attrs.facet import AttrBoolFacetFilter
+from elasticmagic_qf_attrs.facet import (
+    AttrBoolFacetFilter,
+    RANGE_ATTR_MINMAX_COMBINE_SCRIPT,
+)
 from elasticmagic_qf_attrs.facet import AttrRangeFacetFilter
 from elasticmagic_qf_attrs.facet import AttrIntFacetFilter
 from elasticmagic_qf_attrs.facet import RANGE_ATTR_SCRIPT
+from elasticmagic_qf_attrs.facet import RANGE_ATTR_MINMAX_MAP_SCRIPT
+from elasticmagic_qf_attrs.facet import RANGE_ATTR_MINMAX_REDUCE_SCRIPT
 
 import pytest
 
@@ -47,6 +52,20 @@ def range_qf():
     qf = QueryFilter()
     qf.add_filter(
         AttrRangeFacetFilter('attr_range', Field('attr.float'), alias='a')
+    )
+    yield qf
+
+
+@pytest.fixture
+def range_qf_compute_min_max():
+    qf = QueryFilter()
+    qf.add_filter(
+        AttrRangeFacetFilter(
+            'attr_range',
+            Field('attr.float'),
+            alias='a',
+            compute_min_max=True,
+        )
     )
     yield qf
 
@@ -709,10 +728,14 @@ def test_attr_range_facet_filter__empty(range_qf, compiler):
     assert f.attr_id == 8
     assert f.count == 84
     assert f.selected is False
+    assert f.min is None
+    assert f.max is None
     f = qf_res.attr_range.get_facet(439)
     assert f.attr_id == 439
     assert f.count == 28
     assert f.selected is False
+    assert f.min is None
+    assert f.max is None
 
 
 def test_attr_range_facet_filter__single_selected_filter(range_qf, compiler):
@@ -775,10 +798,14 @@ def test_attr_range_facet_filter__single_selected_filter(range_qf, compiler):
     assert f.attr_id == 8
     assert f.count == 84
     assert f.selected is True
+    assert f.min is None
+    assert f.max is None
     f = qf_res.attr_range.get_facet(439)
     assert f.attr_id == 439
     assert f.count == 18
     assert f.selected is False
+    assert f.min is None
+    assert f.max is None
 
 
 def test_attr_range_facet_filter__multiple_selected_filters(
@@ -876,7 +903,87 @@ def test_attr_range_facet_filter__multiple_selected_filters(
     assert f.attr_id == 8
     assert f.count == 84
     assert f.selected is True
+    assert f.min is None
+    assert f.max is None
     f = qf_res.attr_range.get_facet(99)
     assert f.attr_id == 99
     assert f.count == 33
     assert f.selected is True
+    assert f.min is None
+    assert f.max is None
+
+
+def test_attr_range_facet_filter__compute_min_max(
+        range_qf_compute_min_max, compiler,
+):
+    sq = range_qf_compute_min_max.apply(SearchQuery(), {})
+    assert_search_query(
+        sq,
+        SearchQuery().aggs({
+            'qf.attr_range': agg.Terms(
+                script=Script(
+                    RANGE_ATTR_SCRIPT,
+                    lang='painless',
+                    params={
+                        'field': 'attr.float',
+                    },
+                ),
+                size=100,
+            ),
+            'qf.attr_range.min_max': agg.ScriptedMetric(
+                map_script=RANGE_ATTR_MINMAX_MAP_SCRIPT,
+                reduce_script=RANGE_ATTR_MINMAX_REDUCE_SCRIPT,
+                combine_script=RANGE_ATTR_MINMAX_COMBINE_SCRIPT,
+                params={
+                    'field': 'attr.float',
+                },
+            )
+        }),
+        compiler
+    )
+
+    qf_res = range_qf_compute_min_max.process_results(SearchResult(
+        {
+            'aggregations': {
+                'qf.attr_range': {
+                    'buckets': [
+                        {
+                            'key': '8',
+                            'doc_count': 84
+                        },
+                        {
+                            'key': '439',
+                            'doc_count': 28
+                        },
+                    ]
+                },
+                'qf.attr_range.min_max': {
+                    'value': {
+                        '8': [
+                            10.20,
+                            400.50,
+                        ],
+                        '439': [
+                            5.15,
+                            300.25,
+                        ],
+                    },
+                }
+            }
+        },
+        aggregations=sq.get_context().aggregations
+    ))
+    assert qf_res.attr_range.name == 'attr_range'
+    assert qf_res.attr_range.alias == 'a'
+    f = qf_res.attr_range.get_facet(8)
+    assert f.attr_id == 8
+    assert f.count == 84
+    assert f.selected is False
+    assert f.min == 10.20
+    assert f.max == 400.50
+    f = qf_res.attr_range.get_facet(439)
+    assert f.attr_id == 439
+    assert f.count == 28
+    assert f.selected is False
+    assert f.min == 5.15
+    assert f.max == 300.25

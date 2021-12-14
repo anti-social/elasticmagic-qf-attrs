@@ -5,11 +5,12 @@ from elasticmagic import Bool
 from elasticmagic import Range
 from elasticmagic import Script
 from elasticmagic import SearchQuery
+from elasticmagic.agg import SingleValueMetricsAggResult
 from elasticmagic.expression import Expression
 from elasticmagic.expression import FieldOperators
 from elasticmagic.result import SearchResult
 
-from .facet_result import AttrFacetFilterResult
+from .facet_result import AttrFacetFilterResult, TMaxValue, TMinValue
 from .facet_result import AttrRangeFacet
 from .facet_result import AttrRangeFacetFilterResult
 from .facet_result import AttrFacetValue
@@ -37,6 +38,47 @@ for (int i = 0; i < attrsLen; i++) {
 }
 return attrIds;
 '''
+
+RANGE_ATTR_MINMAX_MAP_SCRIPT = '''
+for (v in doc[params.field]) {
+    String attr_id = (v >>> 32).toString();
+    float float_val = Float.intBitsToFloat((int) v);
+    float[] min_max = state.get(attr_id);
+    if (min_max == null) {
+        state[attr_id] = new float[] {float_val, float_val};
+        continue;
+    }
+    if (float_val < min_max[0]){
+        min_max[0] = float_val;
+    }
+    if (float_val > min_max[1]){
+        min_max[1] = float_val;
+    }
+}
+'''
+
+RANGE_ATTR_MINMAX_REDUCE_SCRIPT = '''
+Map reduced = new HashMap();
+for (state in states) {
+    for (entry in state.entrySet()) {
+        String attr_id = entry.getKey();
+        float[] min_max = entry.getValue();
+        if (!reduced.containsKey(attr_id)) {
+            reduced[attr_id] = min_max;
+            continue;
+        }
+        if (min_max[0] < reduced[attr_id][0]) {
+            reduced[attr_id][0] = min_max[0];
+        }
+        if (min_max[1] > reduced[attr_id][1]) {
+            reduced[attr_id][1] = min_max[1];
+        }
+    }
+}
+return reduced;
+'''
+
+RANGE_ATTR_MINMAX_COMBINE_SCRIPT = 'return state;'
 
 
 def _parse_attr_id_from_agg_name(agg_name: str) -> t.Optional[int]:
@@ -263,6 +305,16 @@ class AttrBoolFacetFilter(AttrBoolSimpleFilter, BaseAttrFacetFilter[bool]):
 class AttrRangeFacetFilter(AttrRangeSimpleFilter):
     _attr_id_meta_key = 'float_attr_id'
 
+    def __init__(
+            self,
+            name: str,
+            field: FieldOperators,
+            alias: t.Optional[str] = None,
+            compute_min_max: bool = False,
+    ):
+        super().__init__(name, field, alias=alias)
+        self._compute_min_max = compute_min_max
+
     def _apply_filter_expression(
             self, search_query: SearchQuery, expr: Expression, attr_id: int
     ) -> None:
@@ -282,6 +334,30 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
 
     def _filter_agg_name(self) -> str:
         return f'{self._agg_name()}.filter'
+
+    def _min_max_agg_name(self) -> str:
+        return f'{self._agg_name()}.min_max'
+
+    def _filter_min_max_agg_name(self) -> str:
+        return f'{self._min_max_agg_name()}.filter'
+
+    def _process_min_max_agg_result(
+            self,
+            attr_id: int,
+            min_max_agg: SingleValueMetricsAggResult,
+    ) -> t.Tuple[TMinValue, TMaxValue]:
+
+        min_ = None
+        max_ = None
+
+        if (
+            self._compute_min_max
+            and min_max_agg.value
+            and str(attr_id) in min_max_agg.value
+        ):
+            min_, max_ = min_max_agg.value[str(attr_id)]
+
+        return min_, max_
 
     def _apply_agg(self, search_query: SearchQuery) -> SearchQuery:
         aggs = {}
@@ -335,6 +411,27 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
                 Bool.must(*filters)
             )
 
+        if self._compute_min_max:
+            min_max_agg = agg.ScriptedMetric(
+                map_script=RANGE_ATTR_MINMAX_MAP_SCRIPT,
+                reduce_script=RANGE_ATTR_MINMAX_REDUCE_SCRIPT,
+                combine_script=RANGE_ATTR_MINMAX_COMBINE_SCRIPT,
+                params={
+                    'field': self.field,
+                },
+            )
+            min_max_filters = [
+                f for f in filters
+                if f.field is not self.field
+            ]
+            if min_max_filters:
+                aggs[self._filter_min_max_agg_name()] = agg.Filter(
+                    Bool.must(*min_max_filters),
+                    aggs={self._min_max_agg_name(): min_max_agg}
+                )
+            else:
+                aggs[self._min_max_agg_name()] = min_max_agg
+
         return search_query.aggs(aggs)
 
     def _process_result(
@@ -345,8 +442,8 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
         selected_attr_ids = set()
         for selected_attr_id, w in self._iter_attr_values(params):
             if (
-                    self._parse_last_value(w, 'gte') is not None or
-                    self._parse_last_value(w, 'lte') is not None
+                self._parse_last_value(w, 'gte') is not None or
+                self._parse_last_value(w, 'lte') is not None
             ):
                 selected_attr_ids.add(selected_attr_id)
 
@@ -354,13 +451,29 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
         if main_agg is None:
             main_agg = result.get_aggregation(self._filter_agg_name()) \
                 .get_aggregation(self._agg_name())
+
+        min_max_agg = None
+        if self._compute_min_max:
+            min_max_agg = result.get_aggregation(self._min_max_agg_name())
+            if not min_max_agg:
+                min_max_agg = (
+                    result
+                    .get_aggregation(self._filter_min_max_agg_name())
+                    .get_aggregation(self._min_max_agg_name())
+                )
+
         for bucket in main_agg.buckets:
             attr_id = int(bucket.key)
+            min_, max_ = self._process_min_max_agg_result(
+                attr_id, min_max_agg
+            )
             facet_result.add_facet(
                 AttrRangeFacet(
-                    attr_id,
-                    bucket.doc_count,
-                    attr_id in selected_attr_ids
+                    attr_id=attr_id,
+                    count=bucket.doc_count,
+                    selected=attr_id in selected_attr_ids,
+                    min_=min_,
+                    max_=max_,
                 )
             )
 
@@ -368,8 +481,17 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
             selected_agg = result.get_aggregation(
                 self._agg_name(selected_attr_id)
             )
+            min_, max_ = self._process_min_max_agg_result(
+                selected_attr_id, min_max_agg
+            )
             facet_result.add_facet(
-                AttrRangeFacet(selected_attr_id, selected_agg.doc_count, True)
+                AttrRangeFacet(
+                    attr_id=selected_attr_id,
+                    count=selected_agg.doc_count,
+                    selected=True,
+                    min_=min_,
+                    max_=max_,
+                )
             )
 
         return facet_result
