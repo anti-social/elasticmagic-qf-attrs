@@ -362,10 +362,13 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
     def _apply_agg(self, search_query: SearchQuery) -> SearchQuery:
         aggs = {}
 
+        post_filters_with_meta = list(
+            search_query.get_context().iter_post_filters_with_meta()
+        )
         exclude_tags = {self.qf._name}
-        filters = self._get_agg_filters(
-            search_query.get_context().iter_post_filters_with_meta(),
-            exclude_tags
+        agg_filters = self._get_agg_filters(
+            post_filters_with_meta,
+            exclude_tags,
         )
 
         full_terms_agg = agg.Terms(
@@ -378,18 +381,15 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
             ),
             size=100
         )
-        if filters:
+        if agg_filters:
             aggs[self._filter_agg_name()] = agg.Filter(
-                Bool.must(*filters),
+                Bool.must(*agg_filters),
                 aggs={self._agg_name(): full_terms_agg}
             )
         else:
             aggs[self._agg_name()] = full_terms_agg
 
-        post_filters = list(
-            search_query.get_context().iter_post_filters_with_meta()
-        )
-        for filt, meta in post_filters:
+        for filt, meta in post_filters_with_meta:
             if not meta:
                 continue
             selected_attr_id = meta.get(self._attr_id_meta_key)
@@ -397,7 +397,7 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
                 continue
 
             filters = [
-                f for f, m in post_filters
+                f for f, m in post_filters_with_meta
                 if m.get(self._attr_id_meta_key) != selected_attr_id
             ]
             filters.append(
@@ -421,8 +421,9 @@ class AttrRangeFacetFilter(AttrRangeSimpleFilter):
                 },
             )
             min_max_filters = [
-                f for f in filters
-                if f.field is not self.field
+                f for f, m in post_filters_with_meta
+                if m.get(self._attr_id_meta_key) is None
+                and not m.get('tags', set()).intersection(exclude_tags)
             ]
             if min_max_filters:
                 aggs[self._filter_min_max_agg_name()] = agg.Filter(
